@@ -6,21 +6,25 @@
 #include <pins_arduino.h>
 
 
-#if defined D1
+#define IGNORE_CRC 0            // set to 1 for debugging but don't forget to set back!
+#define IGNORE_FRAME_NUMBER 0   // set to 1 for debugging but don't forget to set back!
+
+
+#if defined DEBUG1
     #define P1(...) printf(__VA_ARGS__)
 #else
     #define P1(...)
 #endif
 
 
-#if defined D2
+#if defined DEBUG2
     #define P2(...) printf(__VA_ARGS__)
 #else
     #define P2(...)
 #endif
 
 
-#if defined D3
+#if defined DEBUG3
     #define P3(...) printf(__VA_ARGS__)
 #else
     #define P3(...)

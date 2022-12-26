@@ -5,9 +5,10 @@
 
 
 void setup() {
-    timer_setup();
-
     Serial.begin(9600);
+    debug_setup();
+    ioHandler_setup();
+    timer_setup();
 }
 
 

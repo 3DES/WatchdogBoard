@@ -9,9 +9,6 @@
 #include "watchdog.hpp"
 
 
-#define IGNORE_CRC 0            // set to 1 for debugging but don't forget to set back!
-#define IGNORE_FRAME_NUMBER 0   // set to 1 for debugging but don't forget to set back!
-
 enum
 {
     eERROR_NO_ERROR = 0,

@@ -33,7 +33,7 @@ enum
 };
 
 
-void inHandler_setup(void);
+void ioHandler_setup(void);
 
 void ioHandler_setOutput(uint16_t index, uint8_t value);
 bool ioHandler_getOutput(uint16_t index);

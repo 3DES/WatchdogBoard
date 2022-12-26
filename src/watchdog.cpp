@@ -4,6 +4,7 @@
 #include "timer.hpp"
 
 
+// watchdog (re-)trigger time
 enum
 {
     eWATCHDOG_VALUE_TRIGGER = 60000 / eTICK_TIME,   // eWATCHDOG_VALUE should be ~ 60 seconds, eTICK_TIME value is given in ms units
@@ -11,9 +12,10 @@ enum
 };
 
 
+// reset lock release time after error, this time has to be long enough to ensure that the external battery switch off circuit has definitely switched OFF!
 enum
 {
-    eLOCK_RESET   = 10000 / eTICK_TIME,   // when watchdog switches to error state the reset lock should be hold for several seconds (10000 = 10000ms)!
+    eLOCK_RESET   = 30000 / eTICK_TIME,   // when watchdog switches to error state the reset lock should be hold for several seconds (10000 = 10000ms)!
     eUNLOCK_RESET = 0,                    // reset can be unlocked again
 };
 

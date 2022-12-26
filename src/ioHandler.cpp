@@ -24,17 +24,16 @@ static bool inputs[eSUPPORTED_INPUTS];      // input states,     false per defau
 static bool highCycle = false;              // switch all outputs synchronized, in highCycle phase switch all active outputs ON, in !highCycle phase switch all active outputs OFF
 
 static const uint8_t inputPorts[eSUPPORTED_INPUTS] = {D2, D3, D4, D5};
-static const uint8_t outputPorts[eSUPPORTED_OUTPUTS + ADDITIONAL_OUTPUTS] = {D7, D8, D9, D11, D12, A1, A2, /* special outputs... */ D6, A0};
+static const uint8_t outputPorts[eSUPPORTED_OUTPUTS + ADDITIONAL_OUTPUTS] = {D7, D8, D9, D11, D12, A1, A2, /* watchdog output... */ D6};        // all output ports that have to be toggled cyclically
 static const uint8_t ledPin = D13;
+static const uint8_t resetLockPin = A0;         // needs to be switched between ON and hi-Z
 
 enum
 {
     eWATCH_DOG_INDEX  = eSUPPORTED_OUTPUTS,         // second last entry in outputPorts is the watchdog port!!!
-    eLOCK_RESET_INDEX = eSUPPORTED_OUTPUTS + 1,     // last entry in outputPorts is the reset lock port!!!
 };
 
 static const uint8_t watchDogPort  = outputPorts[eWATCH_DOG_INDEX];
-static const uint8_t lockResetPort = outputPorts[eLOCK_RESET_INDEX];
 
 
 // set output port to 1 means toggle it every time this method has been called
@@ -95,19 +94,23 @@ static inline void clearWatchdogPort(void)
 // lock reset pin to prevent reset during UART connection
 static inline void lockReset(void)
 {
-    setOutputPort(eLOCK_RESET_INDEX);
+    // set pin to HIGH
+    digitalWrite(resetLockPin, HIGH);       // ensure it's set to HIGH as soon as it will be configured as output
+    pinMode(resetLockPin, OUTPUT);
 }
 
 
 // unlock reset pin, reset during UART connection is possible and e.g. new firmware can be installed
 static inline void unlockReset(void)
 {
-    clearOutputPort(eLOCK_RESET_INDEX);
+    // set pin to hi-Z
+    digitalWrite(resetLockPin, LOW);        // disable pullup because "HIGH" in input mode means pullup is enabled
+    pinMode(resetLockPin, INPUT);           // meanwhile set it to hi-Z
 }
 
 
 // setup used io ports
-void inHandler_setup(void)
+void ioHandler_setup(void)
 {
     for (uint8_t index = 0; index < sizeof(outputPorts); index++)
     {
@@ -121,6 +124,11 @@ void inHandler_setup(void)
 
     // arduino nano LED used for diagnosis
     pinMode(ledPin, OUTPUT);
+    digitalWrite(ledPin, HIGH);
+
+    // setup reset lock pin (default behavior, so it's not necessary)
+    //digitalWrite(resetLockPin, LOW);        // ensure pullup is disabled
+    //pinMode(resetLockPin, INPUT);           // meanwhile set it to hi-Z
 }
 
 
@@ -190,10 +198,9 @@ static inline void handleLed(void)
     {
         switch (watchdog_getState())
         {
-            case eWATCHDOG_STATE_INIT:
-                // set LED only once in setup doesn't work, don't know why?!?!
-                digitalWrite(ledPin, HIGH);
-                break;
+            //case eWATCHDOG_STATE_INIT:
+            // led is switched ON in setup, so no further action is necessary here
+            //    break;
 
             case eWATCHDOG_STATE_OK:
                 // toggle led and set slow blink mode
@@ -216,14 +223,9 @@ static inline void handleLed(void)
 }
 
 
-// cyclic io handler since outputs need to be pulsed, has to be called cyclically!
-void ioHandler_cyclicTask()
+static inline bool handleWatchdog(void)
 {
-    debug_pin3(HIGH);
-
-    bool watchDogIsRunning = false;     // remember watchdog state and switch common outputs only if watchdog is running
-
-    highCycle = !highCycle;             // switch between highCycle and !highCycle phase
+    bool watchDogIsRunning = false;
 
     // set watchdog output periodically so handler can toggle it!
     if (watchdog_getWatchdog())         // this executes the cyclic watchdog thread!
@@ -237,18 +239,37 @@ void ioHandler_cyclicTask()
         watchDogIsRunning = false;      // remember watchdog state
     }
 
+    return watchDogIsRunning;
+}
+
+
+static inline void handleResetLock(void)
+{
     // ask watchdog if external reset is allowed or not
+    static bool resetPinLocked = false;  // initialize with FALSE since during startup a reset is allowed
     if (watchdog_lockResetPort())
     {
-        debug_pin1(HIGH);
-        lockReset();                    // no reset via UART allowed
+        if (!resetPinLocked)
+        {
+            debug_pin1(HIGH);
+            lockReset();                    // no reset via UART allowed
+            resetPinLocked = true;          // do this only once per lock state change
+        }
     }
     else
     {
-        debug_pin1(LOW);
-        unlockReset();                  // reset via UART is allowed (e.g. for firmware update)
+        if (resetPinLocked)
+        {
+            debug_pin1(LOW);
+            unlockReset();                  // reset via UART is allowed (e.g. for firmware update)
+            resetPinLocked = false;         // do this only once per lock state change
+        }
     }
+}
 
+
+static inline void handleOutputs(bool watchDogIsRunning)
+{
     // set outputs periodically so handler can toggle it!
     for (uint8_t index = 0; index < eSUPPORTED_OUTPUTS; index++)
     {
@@ -262,12 +283,36 @@ void ioHandler_cyclicTask()
             clearOutputPort(index);     // if watchdog is not running or output is set to OFF switch the referring port OFF
         }
     }
+}
 
+
+static inline void handleInputs(void)
+{
     // read input
     for (uint8_t index = 0; index < eSUPPORTED_INPUTS; index++)
     {
         inputs[index] = getInputPort(index);
     }
+}
+
+
+// cyclic io handler since outputs need to be pulsed, has to be called cyclically!
+void ioHandler_cyclicTask()
+{
+    debug_pin3(HIGH);
+
+    highCycle = !highCycle;                         // switch between highCycle and !highCycle phase
+
+    bool watchDogIsRunning = handleWatchdog();      // remember watchdog state and switch common outputs only if watchdog is running
+
+    // lock or unlock reset pin
+    handleResetLock();
+
+    // set outputs periodically so handler can toggle it!
+    handleOutputs(watchDogIsRunning);
+
+    // read inputs
+    handleInputs();
 
     // handle status LED
     handleLed();
