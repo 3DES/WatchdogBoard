@@ -2,10 +2,12 @@
 #define TIMER_H
 
 
+#include <stdint.h>
+
 enum
 {
-    eTICK_TIME  = 35,       // 35ms
-    eTICK_VALUE = 8770,     // 35ms ~ 28.503021320259947Hz (16000000/((8770+1)*64))
+    eTICK_TIME  = 1,       // 1ms (1ms is the shortest allowed possible tick time, otherwise cyclic io handler task will not work anymore!!!)
+    eTICK_VALUE = (uint16_t)(((uint64_t)16*1000000 * eTICK_TIME) / ((uint64_t)64 * 1000)) - 1,   // x = ((16*10^6 * eTICK_TIME) / (64 * 1000)) - 1
 };
 
 

@@ -35,10 +35,6 @@ enum
 
 void inHandler_setup(void);
 
-void ioHandler_setWatchdog(uint16_t value);
-bool ioHandler_getWatchdog(void);
-bool ioHandler_readWatchdog(void);
-
 void ioHandler_setOutput(uint16_t index, uint8_t value);
 bool ioHandler_getOutput(uint16_t index);
 bool ioHandler_getInput(uint16_t index);

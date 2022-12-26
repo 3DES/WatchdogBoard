@@ -6,6 +6,8 @@
 #include "messageHandler.hpp"
 #include "crc16X25.hpp"
 #include "ioHandler.hpp"
+#include "watchdog.hpp"
+
 
 #define IGNORE_CRC 0            // set to 1 for debugging but don't forget to set back!
 #define IGNORE_FRAME_NUMBER 0   // set to 1 for debugging but don't forget to set back!
@@ -399,8 +401,8 @@ static void handleRequest(char *received)
             switch (command)
             {
             case eCOMMAND_WATCHDOG:
-                ioHandler_setWatchdog(commandValue);
-                index = addInteger(response, index, ioHandler_readWatchdog());
+                watchdog_setWatchdog(commandValue);
+                index = addInteger(response, index, watchdog_readWatchdog());
                 break;
 
             case eCOMMAND_SET_OUTPUT:

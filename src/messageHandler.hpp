@@ -36,18 +36,18 @@
     damaged .. damaged request or maybe even more than one request if '\n' was damaged
 
     examples:
-        > 1;W;1;<crc>;\n                    # trigger watchdog
-        < 1;W;1;<crc>;\n                    # ACK
-        > 2;W;0;<crc>;\n                    # clear watchdog explicitely
-        < 2;W;0;<crc>;\n                    # ACK
-        < 2;E;errno;crc;<receivedStuff>;\n  # NACK in case of error
-        > 3;S;0;1;crc;\n                    # switch output 0 ON
-        < 3;S;0;1;crc;\n                    # ACK
-        > 4;S;1;1;crc;\n                    # switch output 1 ON
-        < 4;S;1;1;crc;\n                    # ACK
-        > 5;R;0;crc;\n                      # read input 0
-        < 5;R;0;0;crc;\n                    # input 0 is OFF
-        < 5;R;0;1;crc;\n                    # input 0 is ON
+        > 1;W;1;<crc>;\n                      # trigger watchdog
+        < 1;W;1;<crc>;\n                      # ACK
+        > 2;W;0;<crc>;\n                      # clear watchdog explicitely
+        < 2;W;0;<crc>;\n                      # ACK
+        < 2;E;errno;<crc>;<receivedStuff>;\n  # NACK in case of error
+        > 3;S;0;1;<crc>;\n                    # switch output 0 ON
+        < 3;S;0;1;<crc>;\n                    # ACK
+        > 4;S;1;1;<crc>;\n                    # switch output 1 ON
+        < 4;S;1;1;<crc>;\n                    # ACK
+        > 5;R;0;<crc>;\n                      # read input 0
+        < 5;R;0;0;<crc>;\n                    # input 0 is OFF
+        < 5;R;0;1;<crc>;\n                    # input 0 is ON
 */
 
 
