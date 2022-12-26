@@ -18,6 +18,7 @@ void watchdog_setWatchdog(uint16_t value);
 bool watchdog_getWatchdog(void);
 bool watchdog_readWatchdog(void);
 bool watchdog_lockResetPort(void);
+uint8_t watchdog_getState(void);
 
 
 #endif

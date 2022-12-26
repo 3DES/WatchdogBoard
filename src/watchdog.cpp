@@ -112,6 +112,11 @@ bool watchdog_getWatchdog(void)
 }
 
 
+uint8_t watchdog_getState(void)
+{
+    return watchDogState;
+}
+
 /**
  * @brief To check if reset port has to be locked or not
  *
