@@ -12,15 +12,19 @@
 
     WATCHDOG:
         request:  "<fno>;W;<state>;<crc>;\n"
-        response: "<fno>;W;<state>;<crc>;\n"
+        response: "<fno>;W;<oldState>;<newState>;<crc>;\n"
 
     SET OUTPUT:
         request:  "<fno>;S;<output>;<state>;<crc>;\n"
-        response: "<fno>;S;<output>;<state>;<crc>;\n"
+        response: "<fno>;S;<output>;<oldState>;<newState>;<crc>;\n"
 
     GET INPUT:
         request:  "<fno>;R;<input>;<crc>;\n"
         response: "<fno>;R;<input>;<state>;<crc>;\n"
+
+    GET VERSION:
+        request:  "<fno>;V;<crc>;\n"
+        response: "<fno>;V;<version>;<crc>;\n"
 
     ERROR:
         request:  "<damaged>;\n"
@@ -35,19 +39,43 @@
     err ...... error number
     damaged .. damaged request or maybe even more than one request if '\n' was damaged
 
+    semicolon in front of CRC is included in CRC but the CRC and the following semicolon is not but it's expected and, therefore, also protected!
+
+    to test either set IGNORE_CRC validation in debug.hpp or use a page for proper calculation of CRC16-X25, e.g. https://crccalc.com
+
     examples:
-        > 1;W;1;<crc>;\n                      # trigger watchdog
-        < 1;W;1;<crc>;\n                      # ACK
-        > 2;W;0;<crc>;\n                      # clear watchdog explicitely
-        < 2;W;0;<crc>;\n                      # ACK
-        < 2;E;errno;<crc>;<receivedStuff>;\n  # NACK in case of error
-        > 3;S;0;1;<crc>;\n                    # switch output 0 ON
-        < 3;S;0;1;<crc>;\n                    # ACK
-        > 4;S;1;1;<crc>;\n                    # switch output 1 ON
-        < 4;S;1;1;<crc>;\n                    # ACK
-        > 5;R;0;<crc>;\n                      # read input 0
-        < 5;R;0;0;<crc>;\n                    # input 0 is OFF
-        < 5;R;0;1;<crc>;\n                    # input 0 is ON
+        > 0;V;5971;\n                       # get version
+        < 0;V;1.0_4xUNPULSED;63918;\n       # returns version information
+        > 1;W;1;43612;\n                    # trigger watchdog
+        < 1;W;0;1;17361;\n                  # OK, watchdog state switched from 0 to 1
+        > 2;W;1;42529;\n                    # re-trigger watchdog
+        < 2;W;1;1;54714;\n                  # OK, watchdog state stayed at 1
+        > 3;W;0;48082;\n                    # clear watchdog
+        < 3;W;1;0;19933;\n                  # OK, watchdog state switched from 1 to 0
+        > 4;W;1;48859;\n                    # re-trigger watchdog
+        < 4;W;0;0;52584;\n                  # OK, re-triggering is not possible, watchdog state stayed at 0
+        -- reset watchdog now, please --
+        > 0;V;5971;\n                       # get version
+        < 0;V;1.0_4xUNPULSED;63918;\n       # returns version information
+        > 1;W;1;43612;\n                    # trigger watchdog
+        < 1;W;0;1;17361;\n                  # OK, watchdog state switched from 0 to 1
+        > 2;W;0;1;333;\n                    # simulate communication error
+        < 2;E;2;[2;W;0;1;333;];44598;\n     # OK, error responded
+        > 2;W;1;42529;\n                    # re-trigger watchdog
+        < 2;W;1;1;54714;\n                  # OK, watchdog state stayed at 1
+        > 3;S;0;1;22546;\n                  # switch output 0 to ON
+        < 3;S;0;0;1;19258;\n                # OK, output 0 was 0 and changed to 1
+        > 4;S;1;1;55463;\n                  # switch output 1 to ON
+        < 4;S;1;0;1;35812;\n                # OK, output 1 was 0 and changed to 1
+        > 5;W;1;47856;\n                    # re-trigger watchdog
+        < 5;W;1;1;18868;\n                  # OK, watchdog state stayed at 1
+        > 6;R;0;49410;\n                    # read input 0
+        < 6;R;0;0;53888;\n                  # OK, input 0 is 0
+        -- switch ON input 0 now --
+        > 7;R;0;50473;\n                    # read input 0
+        < 7;R;0;1;19175;\n                  # OK, input 0 is 1 now
+        > 8;S;1;0;64029;\n                  # switch output 1 to OFF again
+        < 8;S;1;1;0;22322;\n                # OK, output 1 was 1 and changed to 0
 */
 
 

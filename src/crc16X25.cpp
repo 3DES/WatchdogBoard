@@ -56,6 +56,6 @@ uint16_t crc16X25(char * package, uint16_t length)
         crcSum = crc16X25Step(package[index], crcSum);
         P1("%c %d\n", package[index], crcSum);
     }
-    return crcSum ^ 0xFFFF;
+    return crc16X25Xor(crcSum);
 }
 

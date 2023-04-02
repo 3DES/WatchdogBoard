@@ -6,31 +6,57 @@
 #include <pins_arduino.h>
 
 
-#define IGNORE_CRC 0            // set to 1 for debugging but don't forget to set back!
-#define IGNORE_FRAME_NUMBER 0   // set to 1 for debugging but don't forget to set back!
+//#define DEBUG
+#if not defined DEBUG
+// defines to disable critical DEBUG behavior
+#   define P1(...)
+#   define P2(...)
+#   define P3(...)
+#   define IGNORE_CRC 0            // set to 1 for debugging but don't forget to set back!
+#   define IGNORE_FRAME_NUMBER 0   // set to 1 for debugging but don't forget to set back!
 
 
-#if defined DEBUG1
-    #define P1(...) printf(__VA_ARGS__)
 #else
-    #define P1(...)
+// all critical DEBUG stuff has to be put into this define block!
+#   define IGNORE_CRC 0            // set to 1 for debugging but don't forget to set back!
+#   define IGNORE_FRAME_NUMBER 0   // set to 1 for debugging but don't forget to set back!
+
+// enable debug prints if necessary
+//#   define DEBUG1
+//#   define DEBUG2
+#   define DEBUG3
+
+
+#   if defined DEBUG1 || defined DEBUG2 || defined DEBUG3
+extern char debugPrintBuffer[100];
+#   endif
+
+
+#   if defined DEBUG1
+#       define P1(...) do { sprintf(debugPrintBuffer, __VA_ARGS__); Serial.print(debugPrintBuffer); } while (0)
+#   else
+#       define P1(...)
+#   endif
+
+
+#   if defined DEBUG2
+#       define P2(...) do { sprintf(debugPrintBuffer, __VA_ARGS__); Serial.print(debugPrintBuffer); } while (0)
+#   else
+#       define P2(...)
+#   endif
+
+
+#   if defined DEBUG3
+#       define P3(...) do { sprintf(debugPrintBuffer, __VA_ARGS__); Serial.print(debugPrintBuffer); } while (0)
+#   else
+#       define P3(...)
+#   endif
+
+
 #endif
 
 
-#if defined DEBUG2
-    #define P2(...) printf(__VA_ARGS__)
-#else
-    #define P2(...)
-#endif
-
-
-#if defined DEBUG3
-    #define P3(...) printf(__VA_ARGS__)
-#else
-    #define P3(...)
-#endif
-
-
+// debug stuff that is always available independent from DEBUG definition
 enum
 {
     eDEBUG_PIN_1 = A3,

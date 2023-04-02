@@ -16,7 +16,7 @@
 #error exactly 4 inputs are supported
 #endif
 
-#define ADDITIONAL_OUTPUTS 2
+#define ADDITIONAL_OUTPUTS 1
 
 static bool outputs[eSUPPORTED_OUTPUTS];    // output states,    false per default
 static bool inputs[eSUPPORTED_INPUTS];      // input states,     false per default
@@ -24,7 +24,8 @@ static bool inputs[eSUPPORTED_INPUTS];      // input states,     false per defau
 static bool highCycle = false;              // switch all outputs synchronized, in highCycle phase switch all active outputs ON, in !highCycle phase switch all active outputs OFF
 
 static const uint8_t inputPorts[eSUPPORTED_INPUTS] = {D2, D3, D4, D5};
-static const uint8_t outputPorts[eSUPPORTED_OUTPUTS + ADDITIONAL_OUTPUTS] = {D7, D8, D9, D11, D12, A1, A2, /* watchdog output... */ D6};        // all output ports that have to be toggled cyclically
+static const uint8_t outputPorts[eSUPPORTED_OUTPUTS + ADDITIONAL_OUTPUTS]    = {D7, D8, D9, D11, D12, A1, A2, /* watchdog output... */ D6};        // all output ports including the watchdog output port that has to be the last given one!!!
+static const bool    pulsedPorts[eSUPPORTED_OUTPUTS + ADDITIONAL_OUTPUTS]    = {1,  1,  1,  0,   0,   0,  0,  /* watchdog output... */ 1};         // a value > 0 means output has to be pulsed, last value relates to the watchdog port and is ignored (pulsed always)!!! This is not intended to save energy!
 static const uint8_t ledPin = D13;
 static const uint8_t resetLockPin = A0;         // needs to be switched between ON and hi-Z
 
@@ -36,13 +37,13 @@ enum
 static const uint8_t watchDogPort  = outputPorts[eWATCH_DOG_INDEX];
 
 
-// set output port to 1 means toggle it every time this method has been called
+// set output port to 1 means toggle it every time this method has been called (outputs and watchdog can be handled, the caller has to ensure that the right output is set!)
 static void setOutputPort(uint8_t outputNumber)
 {
     if (outputNumber < sizeof(outputPorts))
     {
-        // toggle port, for this check if it's currently LOW or HIGH
-        if (highCycle)
+        // toggle watchdog port and pulsed port but switch ON not-pulsed port
+        if (highCycle || (!pulsedPorts[outputNumber] && (outputNumber != eWATCH_DOG_INDEX)))
         {
             digitalWrite(outputPorts[outputNumber], HIGH);
         }
@@ -54,7 +55,7 @@ static void setOutputPort(uint8_t outputNumber)
 }
 
 
-// switch output port off
+// switch output port off (outputs and watchdog can be handled, the caller has to ensure that the right output is cleared!)
 static void clearOutputPort(uint8_t outputNumber)
 {
     if (outputNumber < sizeof(outputPorts))
@@ -189,7 +190,7 @@ static inline void handleLed(void)
     enum
     {
         eLED_TOGGLE_SLOW = 2000 / eTICK_TIME,
-        eLED_TOGGLE_FAST =  200 / eTICK_TIME,
+        eLED_TOGGLE_FAST =  100 / eTICK_TIME,
     };
     static uint16_t ledToggleCounter = 0;
 

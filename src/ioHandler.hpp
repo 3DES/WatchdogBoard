@@ -25,7 +25,6 @@ enum
 };
 
 
-
 enum
 {
     eSUPPORTED_OUTPUTS = SUPPORTED_OUTPUTS,     // watchdog is not an output, so there are only 7 of them!
