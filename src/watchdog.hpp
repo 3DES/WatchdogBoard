@@ -14,10 +14,21 @@ enum
 };
 
 
+enum
+{
+    eWATCHDOG_TEST_READBACK = 0,                                // input to be used as watchdog readback
+    eWATCHDOG_TEST_REPEAT_TIME = 100UL * 60 * 60 * 1000,        // every 100h the output will be switched off what will be checked by monitoring the readback input
+    eWATCHDOG_TEST_TIMEOUT = 10U * 1000,                        // time until readback has to become 1 during initial test / become 0 during repeated test
+};
+
+
 void watchdog_setWatchdog(uint16_t value);
 bool watchdog_getWatchdog(void);
 bool watchdog_readWatchdog(void);
-bool watchdog_lockResetPort(void);
+bool watchdog_resetPortMustBeLocked(void);
+
+void watchdog_selfTest(uint8_t readbackValue);
+
 uint8_t watchdog_getState(void);
 
 

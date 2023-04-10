@@ -93,7 +93,7 @@ static inline void clearWatchdogPort(void)
 
 
 // lock reset pin to prevent reset during UART connection
-static inline void lockReset(void)
+static inline void lockResetPort(void)
 {
     // set pin to HIGH
     digitalWrite(resetLockPin, HIGH);       // ensure it's set to HIGH as soon as it will be configured as output
@@ -102,7 +102,7 @@ static inline void lockReset(void)
 
 
 // unlock reset pin, reset during UART connection is possible and e.g. new firmware can be installed
-static inline void unlockReset(void)
+static inline void unlockResetPort(void)
 {
     // set pin to hi-Z
     digitalWrite(resetLockPin, LOW);        // disable pullup because "HIGH" in input mode means pullup is enabled
@@ -224,58 +224,58 @@ static inline void handleLed(void)
 }
 
 
-static inline bool handleWatchdog(void)
+/**
+ * @brief Toggles watchdog output or switches it off
+ * To be called only ONCE per executed cyclic task otherwise watchdog counter will count down too fast, what is not a safety problem but a availability one
+ */
+static inline void handleWatchdog(void)
 {
-    bool watchDogIsRunning = false;
+    watchdog_selfTest(ioHandler_getInput(eWATCHDOG_TEST_READBACK));
 
     // set watchdog output periodically so handler can toggle it!
     if (watchdog_getWatchdog())         // this executes the cyclic watchdog thread!
     {
-        setWatchdogPort();              // WD is running
-        watchDogIsRunning = true;       // remember watchdog state
+        setWatchdogPort();              // WD is running, set output (or toggle it if it is a pulsed one)
     }
     else
     {
-        clearWatchdogPort();            // WD is not running
-        watchDogIsRunning = false;      // remember watchdog state
+        clearWatchdogPort();            // WD is not running, clear output
     }
-
-    return watchDogIsRunning;
 }
 
 
 static inline void handleResetLock(void)
 {
     // ask watchdog if external reset is allowed or not
-    static bool resetPinLocked = false;  // initialize with FALSE since during startup a reset is allowed
-    if (watchdog_lockResetPort())
+    static bool resetPinAlreadyLocked = false;  // initialize with FALSE since during startup a reset is allowed
+    if (watchdog_resetPortMustBeLocked())
     {
-        if (!resetPinLocked)
+        if (!resetPinAlreadyLocked)
         {
             debug_pin1(HIGH);
-            lockReset();                    // no reset via UART allowed
-            resetPinLocked = true;          // do this only once per lock state change
+            lockResetPort();                // no reset via UART allowed
+            resetPinAlreadyLocked = true;   // do this only once per lock state change and not repeatedly
         }
     }
     else
     {
-        if (resetPinLocked)
+        if (resetPinAlreadyLocked)
         {
             debug_pin1(LOW);
-            unlockReset();                  // reset via UART is allowed (e.g. for firmware update)
-            resetPinLocked = false;         // do this only once per lock state change
+            unlockResetPort();              // reset via UART is allowed (e.g. for firmware update)
+            resetPinAlreadyLocked = false;  // do this only once per lock state change and not repeatedly
         }
     }
 }
 
 
-static inline void handleOutputs(bool watchDogIsRunning)
+static inline void handleOutputs(void)
 {
     // set outputs periodically so handler can toggle it!
     for (uint8_t index = 0; index < eSUPPORTED_OUTPUTS; index++)
     {
         // switch output ON if it is set to ON and there is no watchdog ERROR, otherwise switch it OFF
-        if (outputs[index] && watchDogIsRunning)
+        if (outputs[index])
         {
             setOutputPort(index);       // if watchdog is running and output is set to ON switch the referring port ON
         }
@@ -302,15 +302,17 @@ void ioHandler_cyclicTask()
 {
     debug_pin3(HIGH);
 
-    highCycle = !highCycle;                         // switch between highCycle and !highCycle phase
+    // switch between highCycle and !highCycle phase
+    highCycle = !highCycle;
 
-    bool watchDogIsRunning = handleWatchdog();      // remember watchdog state and switch common outputs only if watchdog is running
+    // handle watchdog (will toggle it and switch it ON and OFF if necessary)
+    handleWatchdog();
 
     // lock or unlock reset pin
     handleResetLock();
 
     // set outputs periodically so handler can toggle it!
-    handleOutputs(watchDogIsRunning);
+    handleOutputs();
 
     // read inputs
     handleInputs();

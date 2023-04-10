@@ -26,18 +26,26 @@
         request:  "<fno>;V;<crc>;\n"
         response: "<fno>;V;<version>;<crc>;\n"
 
+    GET DIAGNOSES:
+        request:  "<fno>;D;<crc>;\n"
+        response: "<fno>;D;<diagnosis>;<firstError>;<executedTests>;<crc>;\n"
+
     ERROR:
         request:  "<damaged>;\n"
-        response: "<fno>;E;<err>;[<request>];<crc>;\n"
+        response: "<expectedFNo>;E;<err>;[<request>];<crc>;\n"
                   if the '\n' was damaged then the error response will be sent as soon as a '\n' has been detected and first n characters of damaged request are responded
 
-    fno ...... 0..255 is the frame number that has to be incremented with each telegram
-    output ... 0..6 (watchdog is not an output!)
-    input .... 0..3
-    state .... 0,1
-    crc ...... CRC16 X25
-    err ...... error number
-    damaged .. damaged request or maybe even more than one request if '\n' was damaged
+    fno ............. 0..255 is the frame number that has to be incremented with each telegram
+    output .......... 0..6 (watchdog is not an output!)
+    input ........... 0..3
+    state ........... 0,1
+    diagnosis ....... 16 bit diagnosis collected since last "get diagnosis" command
+    firstError ...... first detected error since last "get diagnosis" command
+    executedTests ... executed self tests since last "get diagnosis" command
+    crc ............. CRC16 X25
+    err ............. error number
+    damaged ......... damaged request or maybe even more than one request if '\n' was damaged
+    expectedFNo ..... error response sends the frame number back that would have been expected, so next valid command should use this frame number
 
     semicolon in front of CRC is included in CRC but the CRC and the following semicolon is not but it's expected and, therefore, also protected!
 

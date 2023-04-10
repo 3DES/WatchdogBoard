@@ -7,21 +7,23 @@
 #include "crc16X25.hpp"
 #include "ioHandler.hpp"
 #include "watchdog.hpp"
+#include "version.hpp"
+#include "errorAndDiagnosis.hpp"
 
 #define MAGIC {'M','H','S','W','M','H','S','W'}     // 4D4853574D485357
-#define VERSION "1.0_4xUNPULSED"                    // not more than MAX_REQUEST_LENGTH characters allowed (but will be checked automatically!)
 
 enum
 {
-    eERROR_NO_ERROR = 0,
-    eERROR_UNKNOWN_COMMAND = 1,
-    eERROR_UNKNOWN_STATE = 2,
-    eERROR_INVALID_FRAME_NUMBER = 3,
-    eERROR_UNEXPECTED_FRAME_NUMBER = 4,
-    eERROR_INVALID_VALUE = 5,
-    eERROR_INVALID_INDEX = 6,
-    eERROR_INVALID_CRC = 7,
-    eERROR_OVERFLOW = 8,
+    eMESSAGE_ERROR_NONE = 0,
+    eMESSAGE_ERROR_UNKNOWN_COMMAND = 1,
+    eMESSAGE_ERROR_UNKNOWN_STATE = 2,
+    eMESSAGE_ERROR_INVALID_FRAME_NUMBER = 3,
+    eMESSAGE_ERROR_UNEXPECTED_FRAME_NUMBER = 4,
+    eMESSAGE_ERROR_INVALID_VALUE = 5,
+    eMESSAGE_ERROR_INVALID_INDEX = 6,
+    eMESSAGE_ERROR_INVALID_CRC = 7,
+    eMESSAGE_ERROR_OVERFLOW = 8,
+    eMESSAGE_ERROR_INVALID_STARTUP = 9,             // before watchdog can be set version has to be requested!
 };
 
 // request/response transmit definitions
@@ -35,6 +37,7 @@ enum
 char request[eMAX_REQUEST_LENGTH + 1] = "";
 uint16_t requestIndex = 0;
 char response[eMAX_RESPONSE_LENGTH + 2] = "";
+static bool versionReadCommandReceived;         // before any 'W' commands are accepted the version has to be read with 'V'!
 
 // version information
 #if MAX_REQUEST_LENGTH != 20
@@ -156,23 +159,22 @@ static inline bool createDecimal(uint16_t *value, char add)
 static uint16_t receiveError;
 
 // set error if not already set
-static uint16_t setError(uint16_t newError)
+static void setMessageError(uint16_t newError)
 {
-    // set error only if it's the first detected one
+    // only remember the first detected error
     if (!receiveError)
     {
         receiveError = newError;
     }
-    return receiveError;
 }
 
 // clear set error for next request
-static void clearError()
+static inline void clearMessageError()
 {
-    receiveError = eERROR_NO_ERROR;
+    receiveError = eMESSAGE_ERROR_NONE;
 }
 
-static uint16_t getError()
+static inline uint16_t getMessageError()
 {
     return receiveError;
 }
@@ -185,11 +187,13 @@ static void handleRequest(char *received)
 
     enum
     {
-        eCOMMAND_WATCHDOG = 'W',    // value for "watchdog" command
-        eCOMMAND_SET_OUTPUT = 'S',  // value for "set output" command
-        eCOMMAND_READ_INPUT = 'R',  // value for "read input" command
-        eCOMMAND_GET_VERSION = 'V', // value for "get version" command
-        eCOMMAND_NACK = 'E',        // value for NACK (only sent, never received!)
+        eCOMMAND_WATCHDOG = 'W',        // value for "watchdog" command
+        eCOMMAND_SET_OUTPUT = 'S',      // value for "set output" command
+        eCOMMAND_READ_INPUT = 'R',      // value for "read input" command
+        eCOMMAND_GET_VERSION = 'V',     // value for "get version" command
+        eCOMMAND_GET_DIAGNOSES = 'D',   // value for "get diagnoses" command
+
+        eCOMMAND_NACK = 'E',            // value for NACK (only sent, never received!)
     };
 
     if (received != NULL)
@@ -198,29 +202,33 @@ static void handleRequest(char *received)
 
         enum
         {
-            eKEY_INDEX_FRAME_NUMBER = 0,        // first entry is the frame number
-            eKEY_INDEX_COMMAND = 1,             // second entry is the command
-            eKEY_INDEX_EMPTY_COMMAND = 2,       // if command token was empty we will reach this invalid state
+            eKEY_INDEX_FRAME_NUMBER = 0,            // first entry is the frame number
+            eKEY_INDEX_COMMAND = 1,                 // second entry is the command
+            eKEY_INDEX_EMPTY_COMMAND = 2,           // if command token was empty we will reach this invalid state
 
-            eKEY_INDEX_WATCHDOG = 100,          // steps for "watchdog" command handling...
-            eKEY_INDEX_WATCHDOG_VALUE = 101,    // handle received watchdog value (1 will re-trigger the watchdog, 0 will clear the watchdog immediately)
-            eKEY_INDEX_WATCHDOG_CRC = 102,      // process received CRC
-            eKEY_INDEX_WATCHDOG_END = 103,      // watchdog end state
+            eKEY_INDEX_WATCHDOG = 100,              // steps for "watchdog" command handling...
+            eKEY_INDEX_WATCHDOG_VALUE = 101,        // handle received watchdog value (1 will re-trigger the watchdog, 0 will clear the watchdog immediately)
+            eKEY_INDEX_WATCHDOG_CRC = 102,          // process received CRC
+            eKEY_INDEX_WATCHDOG_END = 103,          // watchdog end state
 
-            eKEY_INDEX_SET_OUTPUT = 200,        // steps for "set output" command handling...
-            eKEY_INDEX_SET_OUTPUT_INDEX = 201,  // index of output to be set
-            eKEY_INDEX_SET_OUTPUT_VALUE = 202,  // value output will be set to
-            eKEY_INDEX_SET_OUTPUT_CRC = 203,    // process received CRC
-            eKEY_INDEX_SET_OUTPUT_END = 204,    // "set output" end state
+            eKEY_INDEX_SET_OUTPUT = 200,            // steps for "set output" command handling...
+            eKEY_INDEX_SET_OUTPUT_INDEX = 201,      // index of output to be set
+            eKEY_INDEX_SET_OUTPUT_VALUE = 202,      // value output will be set to
+            eKEY_INDEX_SET_OUTPUT_CRC = 203,        // process received CRC
+            eKEY_INDEX_SET_OUTPUT_END = 204,        // "set output" end state
 
-            eKEY_INDEX_GET_INPUT = 300,         // steps for "read input" command handling...
-            eKEY_INDEX_GET_INPUT_INDEX = 301,   // index of input to be read
-            eKEY_INDEX_GET_INPUT_CRC = 302,     // process received CRC
-            eKEY_INDEX_GET_INPUT_END = 303,     // "read input"" end state
+            eKEY_INDEX_GET_INPUT = 300,             // steps for "read input" command handling...
+            eKEY_INDEX_GET_INPUT_INDEX = 301,       // index of input to be read
+            eKEY_INDEX_GET_INPUT_CRC = 302,         // process received CRC
+            eKEY_INDEX_GET_INPUT_END = 303,         // "read input"" end state
 
-            eKEY_INDEX_GET_VERSION = 400,       // steps for "get version" command handling...
-            eKEY_INDEX_GET_VERSION_CRC = 401,   // process received CRC
-            eKEY_INDEX_GET_VERSION_END = 402,   // "read input"" end state
+            eKEY_INDEX_GET_VERSION = 400,           // steps for "get version" command handling...
+            eKEY_INDEX_GET_VERSION_CRC = 401,       // process received CRC
+            eKEY_INDEX_GET_VERSION_END = 402,       // "read input"" end state
+
+            eKEY_INDEX_GET_DIAGNOSES = 500,         // steps for "get diagnoses" command handling...
+            eKEY_INDEX_GET_DIAGNOSES_CRC = 501,     // process received CRC
+            eKEY_INDEX_GET_DIAGNOSES_END = 502,     // "read input"" end state
         };
 
         enum
@@ -240,9 +248,9 @@ static void handleRequest(char *received)
         uint16_t calculateCrc = eCRC_CALCULATION_ENABLED;
         uint16_t receivedCrc = 0;
 
-        clearError();
+        clearMessageError();
 
-        for (uint16_t index = 0; received[index] > '\x0A' && !getError(); index++)
+        for (uint16_t index = 0; received[index] > '\x0A' && !getMessageError(); index++)
         {
             if (calculateCrc != eCRC_CALCULATION_DISABLED)
             {
@@ -266,119 +274,128 @@ static void handleRequest(char *received)
 
             switch (keyIndex)
             {
-            // handle framen number
-            case eKEY_INDEX_FRAME_NUMBER:
-                P3("F[");
-                if (createDecimal(&frameNumber, received[index]))
-                {
-                    setError(eERROR_INVALID_FRAME_NUMBER);
-                }
-                P3("%d]", commandValue);
-                break;
-
-            // handle command and switch to command sub states
-            case eKEY_INDEX_COMMAND:
-                P3("C[");
-                // remember received command
-                command = received[index];
-                P3("%c]", command);
-
-                // switch to command's sub states
-                switch (received[index])
-                {
-                case eCOMMAND_WATCHDOG:
-                    keyIndex = eKEY_INDEX_WATCHDOG;
+                // handle framen number
+                case eKEY_INDEX_FRAME_NUMBER:
+                    P3("F[");
+                    if (createDecimal(&frameNumber, received[index]))
+                    {
+                        setMessageError(eMESSAGE_ERROR_INVALID_FRAME_NUMBER);
+                    }
+                    P3("%d]", commandValue);
                     break;
 
-                case eCOMMAND_SET_OUTPUT:
-                    keyIndex = eKEY_INDEX_SET_OUTPUT;
+                // handle command and switch to command sub states
+                case eKEY_INDEX_COMMAND:
+                    P3("C[");
+                    // remember received command
+                    command = received[index];
+                    P3("%c]", command);
+
+                    // switch to command's sub states
+                    switch (received[index])
+                    {
+                    case eCOMMAND_WATCHDOG:
+                        keyIndex = eKEY_INDEX_WATCHDOG;
+                        break;
+
+                    case eCOMMAND_SET_OUTPUT:
+                        keyIndex = eKEY_INDEX_SET_OUTPUT;
+                        break;
+
+                    case eCOMMAND_READ_INPUT:
+                        keyIndex = eKEY_INDEX_GET_INPUT;
+                        break;
+
+                    case eCOMMAND_GET_VERSION:
+                        keyIndex = eKEY_INDEX_GET_VERSION;
+                        calculateCrc = eCRC_CALCULATION_TO_DISABLE;         // "get version" has no parameters so we have to stop CRC calculation right here
+                        P3("X");
+                        break;
+
+                    case eCOMMAND_GET_DIAGNOSES:
+                        keyIndex = eKEY_INDEX_GET_DIAGNOSES;
+                        calculateCrc = eCRC_CALCULATION_TO_DISABLE;         // "get diagnoses" has no parameters so we have to stop CRC calculation right here
+                        P3("X");
+                        break;
+
+                    default:
+                        setMessageError(eMESSAGE_ERROR_UNKNOWN_COMMAND);
+                        break;
+                    }
                     break;
 
-                case eCOMMAND_READ_INPUT:
-                    keyIndex = eKEY_INDEX_GET_INPUT;
+                // if command token was empty (e.g. 1;;1;1;) or initial command stage (e.g. 1;WW;1;1;) is reached than command is invalid
+                case eKEY_INDEX_EMPTY_COMMAND:
+                case eKEY_INDEX_WATCHDOG:
+                case eKEY_INDEX_SET_OUTPUT:
+                case eKEY_INDEX_GET_INPUT:
+                case eKEY_INDEX_GET_VERSION:
+                case eKEY_INDEX_GET_DIAGNOSES:
+                    setMessageError(eMESSAGE_ERROR_UNKNOWN_COMMAND);
                     break;
 
-                case eCOMMAND_GET_VERSION:
-                    keyIndex = eKEY_INDEX_GET_VERSION;
-                    calculateCrc = eCRC_CALCULATION_TO_DISABLE;         // "get version" has no parameters so we have to stop CRC calculation right here
+                // handle command's value part
+                case eKEY_INDEX_WATCHDOG_VALUE:
+                case eKEY_INDEX_SET_OUTPUT_VALUE:
+                    P3("V[");
+                    if (createDecimal(&commandValue, received[index]))
+                    {
+                        setMessageError(eMESSAGE_ERROR_INVALID_VALUE);
+                    }
+                    P3("%d]", commandValue);
+                    calculateCrc = eCRC_CALCULATION_TO_DISABLE;     // last CRC protected element in message so stop CRC calculation now!
                     P3("X");
                     break;
 
-                default:
-                    setError(eERROR_UNKNOWN_COMMAND);
+                // handle command's index part
+                case eKEY_INDEX_SET_OUTPUT_INDEX:
+                    P3("I[");
+                    if (createDecimal(&commandIndex, received[index]))
+                    {
+                        setMessageError(eMESSAGE_ERROR_INVALID_INDEX);
+                    }
+                    P3("%d]", commandIndex);
                     break;
-                }
-                break;
 
-            // if command token was empty (e.g. 1;;1;1;) or initial command stage (e.g. 1;WW;1;1;) is reached than command is invalid
-            case eKEY_INDEX_EMPTY_COMMAND:
-            case eKEY_INDEX_WATCHDOG:
-            case eKEY_INDEX_SET_OUTPUT:
-            case eKEY_INDEX_GET_INPUT:
-            case eKEY_INDEX_GET_VERSION:
-                setError(eERROR_UNKNOWN_COMMAND);
-                break;
+                // handle command's index part
+                case eKEY_INDEX_GET_INPUT_INDEX:
+                    P3("I[");
+                    if (createDecimal(&commandIndex, received[index]))
+                    {
+                        setMessageError(eMESSAGE_ERROR_INVALID_INDEX);
+                    }
+                    P3("%d]", commandIndex);
+                    calculateCrc = eCRC_CALCULATION_TO_DISABLE;     // last CRC protected element in message so stop CRC calculation now!
+                    P3("X");
+                    break;
 
-            // handle command's value part
-            case eKEY_INDEX_WATCHDOG_VALUE:
-            case eKEY_INDEX_SET_OUTPUT_VALUE:
-                P3("V[");
-                if (createDecimal(&commandValue, received[index]))
-                {
-                    setError(eERROR_INVALID_VALUE);
-                }
-                P3("%d]", commandValue);
-                calculateCrc = eCRC_CALCULATION_TO_DISABLE;
-                P3("X");
-                break;
+                // handle command's CRC part
+                case eKEY_INDEX_WATCHDOG_CRC:
+                case eKEY_INDEX_SET_OUTPUT_CRC:
+                case eKEY_INDEX_GET_INPUT_CRC:
+                case eKEY_INDEX_GET_VERSION_CRC:
+                case eKEY_INDEX_GET_DIAGNOSES_CRC:
+                    P3("S[");
+                    if (createDecimal(&receivedCrc, received[index]))
+                    {
+                        setMessageError(eMESSAGE_ERROR_INVALID_CRC);
+                    }
+                    P3("%u]", receivedCrc);
+                    break;
 
-            // handle command's index part
-            case eKEY_INDEX_SET_OUTPUT_INDEX:
-                P3("I[");
-                if (createDecimal(&commandIndex, received[index]))
-                {
-                    setError(eERROR_INVALID_INDEX);
-                }
-                P3("%d]", commandIndex);
-                break;
+                case eKEY_INDEX_WATCHDOG_END:
+                case eKEY_INDEX_SET_OUTPUT_END:
+                case eKEY_INDEX_GET_INPUT_END:
+                case eKEY_INDEX_GET_VERSION_END:
+                case eKEY_INDEX_GET_DIAGNOSES_END:
+                    // nth. to do here
+                    break;
 
-            // handle command's index part
-            case eKEY_INDEX_GET_INPUT_INDEX:
-                P3("I[");
-                if (createDecimal(&commandIndex, received[index]))
-                {
-                    setError(eERROR_INVALID_INDEX);
-                }
-                P3("%d]", commandIndex);
-                calculateCrc = eCRC_CALCULATION_TO_DISABLE;
-                P3("X");
-                break;
-
-            // handle command's CRC part
-            case eKEY_INDEX_GET_VERSION_CRC:
-            case eKEY_INDEX_WATCHDOG_CRC:
-            case eKEY_INDEX_SET_OUTPUT_CRC:
-            case eKEY_INDEX_GET_INPUT_CRC:
-                P3("S[");
-                if (createDecimal(&receivedCrc, received[index]))
-                {
-                    setError(eERROR_INVALID_CRC);
-                }
-                P3("%u]", receivedCrc);
-                break;
-
-            case eKEY_INDEX_WATCHDOG_END:
-            case eKEY_INDEX_SET_OUTPUT_END:
-            case eKEY_INDEX_GET_INPUT_END:
-            case eKEY_INDEX_GET_VERSION_END:
-                // nth. to do here
-                break;
-
-            // unknown situation (probably too many fields in the received command)
-            default:
-                P3("E(%d)", keyIndex);
-                setError(eERROR_UNKNOWN_STATE);
-                break;
+                // unknown situation (probably too many fields in the received command)
+                default:
+                    P3("E(%d)", keyIndex);
+                    setMessageError(eMESSAGE_ERROR_UNKNOWN_STATE);
+                    break;
             }
         }
 
@@ -387,7 +404,7 @@ static void handleRequest(char *received)
         P3("\nCRCs: [%u] =?= [%u]\n", crc, receivedCrc);
         if ((crc != receivedCrc) && !IGNORE_CRC)
         {
-            setError(eERROR_INVALID_CRC);
+            setMessageError(eMESSAGE_ERROR_INVALID_CRC);
         }
         else
         {
@@ -395,49 +412,53 @@ static void handleRequest(char *received)
             if ((frameNumber != uint16_t(nextExpectedFrameNumber)) && !IGNORE_FRAME_NUMBER)
             {
                 P3("[%d]!=[%d+1]", frameNumber, nextExpectedFrameNumber);
-                setError(eERROR_UNEXPECTED_FRAME_NUMBER);
+                setMessageError(eMESSAGE_ERROR_UNEXPECTED_FRAME_NUMBER);
             }
 
             // validate command parameter(s)
             switch (command)
             {
-            case eCOMMAND_WATCHDOG:
-                // watchdog command has only a value but no index
-                if (commandValue > 1)   // only 0 and 1 are allowed values for the watchdog state!
-                {
-                    setError(eERROR_INVALID_VALUE);
-                }
-                break;
+                case eCOMMAND_WATCHDOG:
+                    // watchdog command has only a value but no index
+                    if (commandValue > 1)   // only 0 and 1 are allowed values for the watchdog state!
+                    {
+                        setMessageError(eMESSAGE_ERROR_INVALID_VALUE);
+                    }
+                    if (!versionReadCommandReceived)   // only 0 and 1 are allowed values for the watchdog state!
+                    {
+                        setMessageError(eMESSAGE_ERROR_INVALID_STARTUP);
+                    }
+                    break;
 
-            case eCOMMAND_SET_OUTPUT:
-                // set output command has an index and a value
-                if (commandIndex >= eSUPPORTED_OUTPUTS)     // this avoids that watchdog is changed with "set output" command, since eSUPPORTED_OUTPUTS is at least one smaller than number of existing outputs!
-                {
-                    setError(eERROR_INVALID_INDEX);
-                }
-                else if (commandValue > 1)  // only 0 and 1 are allowed values for the output state!
-                {
-                    setError(eERROR_INVALID_VALUE);
-                }
-                break;
+                case eCOMMAND_SET_OUTPUT:
+                    // set output command has an index and a value
+                    if (commandIndex >= eSUPPORTED_OUTPUTS)     // this avoids that watchdog is changed with "set output" command, since eSUPPORTED_OUTPUTS is at least one smaller than number of existing outputs!
+                    {
+                        setMessageError(eMESSAGE_ERROR_INVALID_INDEX);
+                    }
+                    else if (commandValue > 1)  // only 0 and 1 are allowed values for the output state!
+                    {
+                        setMessageError(eMESSAGE_ERROR_INVALID_VALUE);
+                    }
+                    break;
 
-            case eCOMMAND_READ_INPUT:
-                // get input command has only an index but no value
-                if (commandIndex >= eSUPPORTED_INPUTS)
-                {
-                    setError(eERROR_INVALID_INDEX);
-                }
-                break;
+                case eCOMMAND_READ_INPUT:
+                    // get input command has only an index but no value
+                    if (commandIndex >= eSUPPORTED_INPUTS)
+                    {
+                        setMessageError(eMESSAGE_ERROR_INVALID_INDEX);
+                    }
+                    break;
             }
         }
 
         // prepare response and execute command
         uint16_t index = 0;
         index = addInteger(response, index, nextExpectedFrameNumber);
-        if (getError())
+        if (getMessageError())
         {
             index = addChar(response, index, eCOMMAND_NACK);
-            index = addInteger(response, index, getError());
+            index = addInteger(response, index, getMessageError());
             index = addRequest(response, index, received);
         }
         else
@@ -445,32 +466,39 @@ static void handleRequest(char *received)
             index = addChar(response, index, command);
             switch (command)
             {
-            case eCOMMAND_WATCHDOG:
-                index = addInteger(response, index, watchdog_readWatchdog());
-                watchdog_setWatchdog(commandValue);
-                index = addInteger(response, index, watchdog_readWatchdog());
-                break;
+                case eCOMMAND_WATCHDOG:
+                    index = addInteger(response, index, watchdog_readWatchdog());
+                    watchdog_setWatchdog(commandValue);
+                    index = addInteger(response, index, watchdog_readWatchdog());
+                    break;
 
-            case eCOMMAND_SET_OUTPUT:
-                index = addInteger(response, index, commandIndex);
-                index = addInteger(response, index, ioHandler_getOutput(commandIndex));
-                ioHandler_setOutput(commandIndex, commandValue);
-                index = addInteger(response, index, ioHandler_getOutput(commandIndex));
-                break;
+                case eCOMMAND_SET_OUTPUT:
+                    index = addInteger(response, index, commandIndex);
+                    index = addInteger(response, index, ioHandler_getOutput(commandIndex));
+                    ioHandler_setOutput(commandIndex, commandValue);
+                    index = addInteger(response, index, ioHandler_getOutput(commandIndex));
+                    break;
 
-            case eCOMMAND_READ_INPUT:
-                index = addInteger(response, index, commandIndex);
-                index = addInteger(response, index, ioHandler_getInput(commandIndex));
-                break;
+                case eCOMMAND_READ_INPUT:
+                    index = addInteger(response, index, commandIndex);
+                    index = addInteger(response, index, ioHandler_getInput(commandIndex));
+                    break;
 
-            case eCOMMAND_GET_VERSION:
-                index = addString(response, index, VERSION_FIELD.version);
-                index = finalizeToken(response, index);
-                break;
+                case eCOMMAND_GET_VERSION:
+                    index = addString(response, index, VERSION_FIELD.version);
+                    index = finalizeToken(response, index);
+                    versionReadCommandReceived = true;         // remember that version has been requested, therefore, watchdog can be switched ON now
+                    break;
 
-            default:
-                // not possible since error handling would be active in that case and we wouldn't be here!
-                break;
+                case eCOMMAND_GET_DIAGNOSES:
+                    index = addInteger(response, index, errorAndDiagnosis_getDiagnoses());
+                    index = addInteger(response, index, errorAndDiagnosis_getErrorNumber());
+                    index = addInteger(response, index, errorAndDiagnosis_getExecutedTests());
+                    break;
+
+                default:
+                    // not possible since error handling would be active in that case and we wouldn't be here!
+                    break;
             }
 
             // no error so increment frame number since for the current frame number a valid message has been received
@@ -484,7 +512,7 @@ static void handleRequest(char *received)
         uint16_t index = 0;
         index = addInteger(response, index, nextExpectedFrameNumber);
         index = addChar(response, index, eCOMMAND_NACK);
-        index = addInteger(response, index, eERROR_OVERFLOW);
+        index = addInteger(response, index, eMESSAGE_ERROR_OVERFLOW);
         index = addInteger(response, index, crc16X25(response, index));
     }
     P2("<<<<%s\n\n", response);

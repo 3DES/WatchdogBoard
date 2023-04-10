@@ -14,12 +14,10 @@
 #   define P3(...)
 #   define IGNORE_CRC 0            // set to 1 for debugging but don't forget to set back!
 #   define IGNORE_FRAME_NUMBER 0   // set to 1 for debugging but don't forget to set back!
-
-
 #else
 // all critical DEBUG stuff has to be put into this define block!
-#   define IGNORE_CRC 0            // set to 1 for debugging but don't forget to set back!
-#   define IGNORE_FRAME_NUMBER 0   // set to 1 for debugging but don't forget to set back!
+#   define IGNORE_CRC 1            // set to 1 for debugging but don't forget to set back!
+#   define IGNORE_FRAME_NUMBER 1   // set to 1 for debugging but don't forget to set back!
 
 // enable debug prints if necessary
 //#   define DEBUG1
