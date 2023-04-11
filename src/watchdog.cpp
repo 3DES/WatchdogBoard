@@ -33,7 +33,7 @@ enum
 };
 
 
-static uint16_t watchdog                  = eWATCHDOG_VALUE_CLEAR;          // watchdog counter, during startup it's ok if the value is 0 but whenever it has been started it's not allowed to reach 0 again!
+static uint16_t watchdogCounter           = eWATCHDOG_VALUE_CLEAR;          // watchdog counter, during startup it's ok if the value is 0 but whenever it has been started it's not allowed to reach 0 again!
 static uint8_t  watchDogState             = eWATCHDOG_STATE_INIT;           // curent watchdog state to decide if action is accepted or ignored
 static uint16_t resetLockCounter          = eUNLOCK_RESET;                  // initially the reset port is not locked, when the watchdog is triggered reset port should be locked, when watchdog is cleared again the reset port should stay locked for a while
 
@@ -95,7 +95,7 @@ static void switchWatchdogIntoErrorState(void)
     // stop watch dog even it's already been stopped
     noInterrupts();
     watchDogState = eWATCHDOG_STATE_ERROR;
-    watchdog = eWATCHDOG_VALUE_CLEAR;
+    watchdogCounter = eWATCHDOG_VALUE_CLEAR;
     interrupts();
     debug_pin2(LOW);
 
@@ -262,7 +262,7 @@ void watchdog_setWatchdog(uint16_t value)
         {
             // set watch dog values
             noInterrupts();
-            watchdog  = eWATCHDOG_VALUE_TRIGGER;
+            watchdogCounter  = eWATCHDOG_VALUE_TRIGGER;
             resetLockCounter = eLOCK_RESET;             // lock reset port as soon as watchdog has been started
             watchDogState = eWATCHDOG_STATE_OK;
             interrupts();
@@ -291,7 +291,7 @@ void watchdog_setWatchdog(uint16_t value)
  */
 bool watchdog_readWatchdog(void)
 {
-    return (watchdog != eWATCHDOG_VALUE_CLEAR);
+    return (watchdogCounter != eWATCHDOG_VALUE_CLEAR);
 }
 
 
@@ -312,7 +312,7 @@ bool watchdog_getWatchdog(void)
     if (watchdog_readWatchdog())
     {
         noInterrupts();
-        watchdog--;       // this expects that watchdog == 0 and watchdog == WATCHDOG_VALUE_CLEAR means the same!
+        watchdogCounter--;       // this expects that watchdog == 0 and watchdog == WATCHDOG_VALUE_CLEAR means the same!
         interrupts();
 
         // watchdog counter became zero
@@ -324,7 +324,7 @@ bool watchdog_getWatchdog(void)
     }
 
     // since this method is called periodically do an overall check if watchdog is in ERROR state (defensive programming... yes we want this here!)
-    if (!watchdog_readWatchdog() && (watchDogState != eWATCHDOG_STATE_ERROR))
+    if (!watchdog_readWatchdog() && (watchDogState == eWATCHDOG_STATE_OK))
     {
         errorAndDiagnosis_setError(eERROR_WATCHDOG_STOPPED_UNEXPECTEDLY);
 
