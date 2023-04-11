@@ -191,6 +191,7 @@ static void handleRequest(char *received)
         eCOMMAND_SET_OUTPUT = 'S',      // value for "set output" command
         eCOMMAND_READ_INPUT = 'R',      // value for "read input" command
         eCOMMAND_GET_VERSION = 'V',     // value for "get version" command
+        eCOMMAND_EXECUTE_TEST = 'T',    // value for "execute test" command
         eCOMMAND_GET_DIAGNOSES = 'D',   // value for "get diagnoses" command
 
         eCOMMAND_NACK = 'E',            // value for NACK (only sent, never received!)
@@ -220,15 +221,19 @@ static void handleRequest(char *received)
             eKEY_INDEX_GET_INPUT = 300,             // steps for "read input" command handling...
             eKEY_INDEX_GET_INPUT_INDEX = 301,       // index of input to be read
             eKEY_INDEX_GET_INPUT_CRC = 302,         // process received CRC
-            eKEY_INDEX_GET_INPUT_END = 303,         // "read input"" end state
+            eKEY_INDEX_GET_INPUT_END = 303,         // "read input" end state
 
             eKEY_INDEX_GET_VERSION = 400,           // steps for "get version" command handling...
             eKEY_INDEX_GET_VERSION_CRC = 401,       // process received CRC
-            eKEY_INDEX_GET_VERSION_END = 402,       // "read input"" end state
+            eKEY_INDEX_GET_VERSION_END = 402,       // "get version" end state
 
             eKEY_INDEX_GET_DIAGNOSES = 500,         // steps for "get diagnoses" command handling...
             eKEY_INDEX_GET_DIAGNOSES_CRC = 501,     // process received CRC
-            eKEY_INDEX_GET_DIAGNOSES_END = 502,     // "read input"" end state
+            eKEY_INDEX_GET_DIAGNOSES_END = 502,     // "get diagnoses" end state
+
+            eKEY_INDEX_EXECUTE_TEST = 600,          // steps for "execute test" command handling...
+            eKEY_INDEX_EXECUTE_TEST_CRC = 601,      // process received CRC
+            eKEY_INDEX_EXECUTE_TEST_END = 602,      // "execute test" end state
         };
 
         enum
@@ -318,6 +323,12 @@ static void handleRequest(char *received)
                         P3("X");
                         break;
 
+                    case eCOMMAND_EXECUTE_TEST:
+                        keyIndex = eKEY_INDEX_EXECUTE_TEST;
+                        calculateCrc = eCRC_CALCULATION_TO_DISABLE;         // "execute test" has no parameters so we have to stop CRC calculation right here
+                        P3("X");
+                        break;
+
                     default:
                         setMessageError(eMESSAGE_ERROR_UNKNOWN_COMMAND);
                         break;
@@ -331,6 +342,7 @@ static void handleRequest(char *received)
                 case eKEY_INDEX_GET_INPUT:
                 case eKEY_INDEX_GET_VERSION:
                 case eKEY_INDEX_GET_DIAGNOSES:
+                case eKEY_INDEX_EXECUTE_TEST:
                     setMessageError(eMESSAGE_ERROR_UNKNOWN_COMMAND);
                     break;
 
@@ -375,6 +387,7 @@ static void handleRequest(char *received)
                 case eKEY_INDEX_GET_INPUT_CRC:
                 case eKEY_INDEX_GET_VERSION_CRC:
                 case eKEY_INDEX_GET_DIAGNOSES_CRC:
+                case eKEY_INDEX_EXECUTE_TEST_CRC:
                     P3("S[");
                     if (createDecimal(&receivedCrc, received[index]))
                     {
@@ -388,6 +401,7 @@ static void handleRequest(char *received)
                 case eKEY_INDEX_GET_INPUT_END:
                 case eKEY_INDEX_GET_VERSION_END:
                 case eKEY_INDEX_GET_DIAGNOSES_END:
+                case eKEY_INDEX_EXECUTE_TEST_END:
                     // nth. to do here
                     break;
 
@@ -494,6 +508,10 @@ static void handleRequest(char *received)
                     index = addInteger(response, index, errorAndDiagnosis_getDiagnoses());
                     index = addInteger(response, index, errorAndDiagnosis_getErrorNumber());
                     index = addInteger(response, index, errorAndDiagnosis_getExecutedTests());
+                    break;
+
+                case eCOMMAND_EXECUTE_TEST:
+                    index = addInteger(response, index, watchdog_requestSelfTest());
                     break;
 
                 default:

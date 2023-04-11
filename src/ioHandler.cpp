@@ -230,7 +230,7 @@ static inline void handleLed(void)
  */
 static inline void handleWatchdog(void)
 {
-    watchdog_selfTest(ioHandler_getInput(eWATCHDOG_TEST_READBACK));
+    watchdog_selfTestHandler(ioHandler_getInput(eWATCHDOG_TEST_READBACK));
 
     // set watchdog output periodically so handler can toggle it!
     if (watchdog_getWatchdog())         // this executes the cyclic watchdog thread!

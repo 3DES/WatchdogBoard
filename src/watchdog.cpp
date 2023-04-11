@@ -24,12 +24,12 @@ enum
 
 enum
 {
-    eWATCHDOG_TEST_INITIAL,                 // initial test is running, the initial test is different from the repeated one, it only checks that readback is 0
-    eWATCHDOG_TEST_REPEATED_EXPECT_ON,      // repeated test is running, the repeated test checks if readback is 1, then switches of the output and waits until the readback becomes 0
-    eWATCHDOG_TEST_REPEATED_EXPECT_OFF,     // repeated test is running, the repeated test checks if readback is 1, then switches of the output and waits until the readback becomes 0
+    eWATCHDOG_TESTSTATE_INITIAL,                // initial test is running, the initial test is different from the repeated one, it only checks that readback is 0
+    eWATCHDOG_TESTSTATE_REPEATED_EXPECT_ON,     // repeated test is running, the repeated test checks if readback is 1, then switches of the output and waits until the readback becomes 0
+    eWATCHDOG_TESTSTATE_REPEATED_EXPECT_OFF,    // repeated test is running, the repeated test checks if readback is 1, then switches of the output and waits until the readback becomes 0
 
-    eWATCHDOG_TEST_PASSED,                  // watchdog self test passed (wait until eWATCHDOG_TEST_REPEAT_TIME is over)
-    eWATCHDOG_TEST_FAILED,                  // repeated test failed (it's a final state and will never be left again!)
+    eWATCHDOG_TESTSTATE_PASSED,                 // watchdog self test passed (wait until eWATCHDOG_TEST_REPEAT_TIME is over)
+    eWATCHDOG_TESTSTATE_FAILED,                 // repeated test failed (it's a final state and will never be left again!)
 };
 
 
@@ -39,7 +39,9 @@ static uint16_t resetLockCounter          = eUNLOCK_RESET;                  // i
 
 
 static bool selfTestConfirmation = false;                       // only if self test sets this to TRUE a selfTestApproval() will result in TRUE and the watchdog output is allowed to be switched ON
-static uint16_t waitingTimeout = eWATCHDOG_TEST_TIMEOUT;        // waiting timeout if necessary (initially wait for 0 will last forever)
+
+static uint16_t watchDogTestState = eWATCHDOG_TESTSTATE_INITIAL;    // initial state after start up
+static bool watchDogTestRequested = false;                          // boolean to be set to true if request command has been received
 
 
 enum
@@ -59,24 +61,53 @@ enum
  */
 static uint16_t readBackPortPolling(bool expectedReadbackState, uint8_t readbackValue)
 {
+    enum {
+        eSTATE_COUNTER_END  = 0,
+        eSTATE_COUNTER_INIT = 10,        // expected read back state has to be seen for this amount of ticks to be accepted
+    };
+    enum {
+        eWATCHDOG_TEST_TIMEOUT_OVER = 0,
+        eWATCHDOG_TEST_TIMEOUT_TIME = 10U * 1000,   // time until readback has to become 1 during initial test / become 0 during repeated test
+    };
+
+    static uint8_t stateCounter = eSTATE_COUNTER_END;
+    static uint16_t waitingTimeout = eWATCHDOG_TEST_TIMEOUT_OVER;
+
     uint16_t result = eSELF_TEST_POLLING;
+
+    // if stateCounter is eSTATE_COUNTER_END we entered a new test and have to set some initial values
+    if (stateCounter == eSTATE_COUNTER_END)
+    {
+        stateCounter = eSTATE_COUNTER_INIT;
+        waitingTimeout = eWATCHDOG_TEST_TIMEOUT_TIME;
+    }
 
     // check if expectedReadbackState and readbackValue are identical (both OFF or both ON)
     if ((!readbackValue && !expectedReadbackState) || (readbackValue && expectedReadbackState))
     {
-        // readback as expected
-        result = eSELF_TEST_OK;
+        stateCounter--;
+
+        // at the end of the test stateCounter has to be 0
+        if (stateCounter == eSTATE_COUNTER_END)
+        {
+            // readback as expected
+            result = eSELF_TEST_OK;
+        }
     }
     else
     {
+        // still polling...
+        waitingTimeout--;
+
+        // set state counter back to init value for the case there were some but not enough matching states in a single row
+        stateCounter = eSTATE_COUNTER_INIT;
+
         // give readback some more time to switch to expected state
-        if (waitingTimeout)
+        if (waitingTimeout == eWATCHDOG_TEST_TIMEOUT_OVER)
         {
-            // still polling...
-            waitingTimeout--;
-        }
-        else
-        {
+            // at the end of the test stateCounter has to be 0 even if the test failed
+            stateCounter = eSTATE_COUNTER_END;
+
             // timeout happened
             result = eSELF_TEST_TIMEOUT;
         }
@@ -108,6 +139,25 @@ static void switchWatchdogIntoErrorState(void)
 
 
 /**
+ * @brief Requests self test
+ *
+ * @return true     in case watchdog is already running an a test can be requested
+ * @return false    in case watchdog is not running or a test is already in progress
+ */
+bool watchdog_requestSelfTest(void)
+{
+    bool requestPossible = false;
+    if (watchDogTestState == eWATCHDOG_TESTSTATE_PASSED)
+    {
+        watchDogTestRequested = true;
+        requestPossible = true;
+    }
+
+    return requestPossible;
+}
+
+
+/**
  * @brief Watchdog self test method has to be called always before watchdog state can be read otherwise watchdog state will always result to FALSE
  *
  * @param readbackValue     current value of readback input
@@ -115,10 +165,9 @@ static void switchWatchdogIntoErrorState(void)
  * @return true     in case test was OK or test state needs watchdog to be switched ON
  * @return false    in case test failed or test state needs watchdog to be switched OFF
  */
-void watchdog_selfTest(uint8_t readbackValue)
+void watchdog_selfTestHandler(uint8_t readbackValue)
 {
-    static uint32_t watchDogTestRemainingTime = 0UL;                // remaining time until next test will be executed (initially immediately when watchdog will be switched on, repeated test after eWATCHDOG_TEST_REPEAT_TIME ms)
-    static uint16_t watchDogTestState = eWATCHDOG_TEST_INITIAL;     // initial state after start up
+    static uint32_t watchDogTestRemainingTime = 0UL;    // remaining time until next test will be executed (initially immediately when watchdog will be switched on, repeated test after eWATCHDOG_TEST_REPEAT_TIME ms)
 
     selfTestConfirmation = false;           // ensure watchdog cannot be switched ON except the following code decides that self test state is OK
 
@@ -128,14 +177,14 @@ void watchdog_selfTest(uint8_t readbackValue)
         switch (watchDogTestState)
         {
             // initially ensure watchdog is switched OFF (what means it can be switched off!)
-            case eWATCHDOG_TEST_INITIAL:
+            case eWATCHDOG_TESTSTATE_INITIAL:
                 // wait for read back becomes OFF
                 switch (readBackPortPolling(false, readbackValue))
                 {
                     case eSELF_TEST_TIMEOUT:
                         // timeout during initial self test
                         errorAndDiagnosis_setError(eERROR_INITIAL_SELF_TEST_ERROR);
-                        watchDogTestState = eWATCHDOG_TEST_FAILED;
+                        watchDogTestState = eWATCHDOG_TESTSTATE_FAILED;
                         break;
 
                     case eSELF_TEST_OK:
@@ -143,7 +192,7 @@ void watchdog_selfTest(uint8_t readbackValue)
                         errorAndDiagnosis_setExecutedTest(eEXECUTED_TEST_SELF_TEST);
                         selfTestConfirmation = true;            // self test confirms that watchdog output can be switched ON (test was successful)
                         watchDogTestRemainingTime = eWATCHDOG_TEST_REPEAT_TIME;
-                        watchDogTestState = eWATCHDOG_TEST_PASSED;
+                        watchDogTestState = eWATCHDOG_TESTSTATE_PASSED;
                         break;
 
                     // ignore the rest
@@ -152,7 +201,7 @@ void watchdog_selfTest(uint8_t readbackValue)
                 }
                 break;
 
-            case eWATCHDOG_TEST_REPEATED_EXPECT_ON:
+            case eWATCHDOG_TESTSTATE_REPEATED_EXPECT_ON:
                 selfTestConfirmation = true;            // self test confirms that watchdog output can be switched ON (what is the expected state here)
                 // wait for read back becomes ON
                 switch (readBackPortPolling(true, readbackValue))
@@ -160,13 +209,12 @@ void watchdog_selfTest(uint8_t readbackValue)
                     case eSELF_TEST_TIMEOUT:
                         // timeout during repeated self test, watchdog is not OK, watchdog port is OFF
                         errorAndDiagnosis_setError(eERROR_REPEATED_SELF_TEST_ON_ERROR);
-                        watchDogTestState = eWATCHDOG_TEST_FAILED;
+                        watchDogTestState = eWATCHDOG_TESTSTATE_FAILED;
                         break;
 
                     case eSELF_TEST_OK:
                         // first stage of repeated self test passed, watchdog is not in error state and watchdog port is ON!
-                        waitingTimeout = eWATCHDOG_TEST_TIMEOUT;                    // reset timeout time again
-                        watchDogTestState = eWATCHDOG_TEST_REPEATED_EXPECT_OFF;     // switch to next test state
+                        watchDogTestState = eWATCHDOG_TESTSTATE_REPEATED_EXPECT_OFF;    // switch to next test state
                         break;
 
                     // ignore the rest
@@ -175,13 +223,14 @@ void watchdog_selfTest(uint8_t readbackValue)
                 }
                 break;
 
-            case eWATCHDOG_TEST_REPEATED_EXPECT_OFF:
+            case eWATCHDOG_TESTSTATE_REPEATED_EXPECT_OFF:
+            {
                 // wait for read back becomes OFF
-                switch (readBackPortPolling(true, readbackValue))
+                switch (readBackPortPolling(false, readbackValue))
                 {
                     case eSELF_TEST_TIMEOUT:
                         // timeout during repeated self test, watchdog output couldn't be switched OFF
-                        watchDogTestState = eWATCHDOG_TEST_FAILED;
+                        watchDogTestState = eWATCHDOG_TESTSTATE_FAILED;
                         errorAndDiagnosis_setError(eERROR_REPEATED_SELF_TEST_OFF_ERROR);
                         break;
 
@@ -190,7 +239,7 @@ void watchdog_selfTest(uint8_t readbackValue)
                         errorAndDiagnosis_setExecutedTest(eEXECUTED_TEST_SELF_TEST);
                         selfTestConfirmation = true;                                // self test confirms that watchdog output can be switched ON (test was successful)
                         watchDogTestRemainingTime = eWATCHDOG_TEST_REPEAT_TIME;     // reset time for next self test (100 hours)
-                        watchDogTestState = eWATCHDOG_TEST_PASSED;                  // finish test
+                        watchDogTestState = eWATCHDOG_TESTSTATE_PASSED;             // finish test
                         break;
 
                     // ignore the rest
@@ -198,25 +247,32 @@ void watchdog_selfTest(uint8_t readbackValue)
                         break;
                 }
                 break;
+            }
 
             // last self test passed so wait for next one
-            case eWATCHDOG_TEST_PASSED:
+            case eWATCHDOG_TESTSTATE_PASSED:
                 selfTestConfirmation = true;            // self test confirms that watchdog output can be switched ON (last test was successful and there is still some time until it has to be executed for the next time)
-                if (watchDogTestRemainingTime)
+                if (watchDogTestRequested)
+                {
+                    // new test requested
+                    watchDogTestRequested = false;
+                    watchDogTestState = eWATCHDOG_TESTSTATE_REPEATED_EXPECT_ON;     // switch to next test state
+                }
+                else if (watchDogTestRemainingTime)
                 {
                     // still some time left since self test has been executed the last time
                     watchDogTestRemainingTime--;
                 }
                 else
                 {
-                    // time since last self test is over, initiate another self test
-                    waitingTimeout = eWATCHDOG_TEST_TIMEOUT;                    // reset timeout time again
-                    watchDogTestState = eWATCHDOG_TEST_REPEATED_EXPECT_ON;      // switch to next test state
+                    // time since last self test is over an no further one has been requested
+                    errorAndDiagnosis_setError(eERROR_INITIAL_SELF_TEST_ERROR);
+                    watchDogTestState = eWATCHDOG_TESTSTATE_FAILED;
                 }
                 break;
 
             // watchdog cannot be switched ON again (since selfTestConfirmation will never become TRUE if we are here), a reset is necessary!
-            case eWATCHDOG_TEST_FAILED:
+            case eWATCHDOG_TESTSTATE_FAILED:
                 switchWatchdogIntoErrorState();
                 break;
         }
@@ -225,7 +281,7 @@ void watchdog_selfTest(uint8_t readbackValue)
 
 
 /**
- * @brief Check if self test approval is available but approval will be cleared after checked once and has to be requested again by calling watchdog_selfTest()
+ * @brief Check if self test approval is available but approval will be cleared after checked once and has to be requested again by calling watchdog_selfTestHandler()
  *
  * @return true     self test approval is available
  * @return false    self test approval is NOT available

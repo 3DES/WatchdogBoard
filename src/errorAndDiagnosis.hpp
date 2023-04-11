@@ -10,13 +10,14 @@ enum
 {
     eERROR_NONE = 0,
 
-    eERROR_INITIAL_SELF_TEST_ERROR       = 0x0001,   // error number in case of self test error during self test initial phase
-    eERROR_REPEATED_SELF_TEST_ON_ERROR   = 0x0002,   // error number in case of self test error while self test has been repeated
-    eERROR_REPEATED_SELF_TEST_OFF_ERROR  = 0x0003,   // error number in case of self test error while self test has been repeated
+    eERROR_INITIAL_SELF_TEST_ERROR           = 0x0001,   // error number in case of self test error during self test initial phase
+    eERROR_REPEATED_SELF_TEST_ON_ERROR       = 0x0002,   // error number in case of self test error while self test has been repeated
+    eERROR_REPEATED_SELF_TEST_OFF_ERROR      = 0x0003,   // error number in case of self test error while self test has been repeated
+    eERROR_REPEATED_SELF_TEST_REQUEST_MISSED = 0x0004,   // error number in case of self test has not been requested early enough
 
-    eERROR_WATCHDOG_NOT_TRIGGERED        = 0x1000,   // watchdog was already running but it was not triggered anymore
-    eERROR_WATCHDOG_CLEARED              = 0x1001,   // watchdog was already running and has been cleared via command
-    eERROR_WATCHDOG_STOPPED_UNEXPECTEDLY = 0x1002,   // watchdog was already running but now it has been stopped but is not in ERROR state
+    eERROR_WATCHDOG_NOT_TRIGGERED            = 0x1000,   // watchdog was already running but it was not triggered anymore
+    eERROR_WATCHDOG_CLEARED                  = 0x1001,   // watchdog was already running and has been cleared via command
+    eERROR_WATCHDOG_STOPPED_UNEXPECTEDLY     = 0x1002,   // watchdog was already running but now it has been stopped but is not in ERROR state
 };
 
 

@@ -30,6 +30,10 @@
         request:  "<fno>;D;<crc>;\n"
         response: "<fno>;D;<diagnosis>;<firstError>;<executedTests>;<crc>;\n"
 
+    EXECUTE TEST:
+        request:  "<fno>;T;<crc>;\n"
+        response: "<fno>;T;<requestAccepted>;<crc>;\n"
+
     ERROR:
         request:  "<damaged>;\n"
         response: "<expectedFNo>;E;<err>;[<request>];<crc>;\n"
