@@ -62,23 +62,23 @@ enum
 static uint16_t readBackPortPolling(bool expectedReadbackState, uint8_t readbackValue)
 {
     enum {
-        eSTATE_COUNTER_END  = 0,
-        eSTATE_COUNTER_INIT = 10,        // expected read back state has to be seen for this amount of ticks to be accepted
+        eSTATE_TICKS_COUNTER_END  = 0,
+        eSTATE_TICKS_COUNTER_INIT = 10,        // expected read back state has to be seen for this amount of ticks to be accepted
     };
     enum {
         eWATCHDOG_TEST_TIMEOUT_OVER = 0,
         eWATCHDOG_TEST_TIMEOUT_TIME = 10U * 1000,   // time until readback has to become 1 during initial test / become 0 during repeated test
     };
 
-    static uint8_t stateCounter = eSTATE_COUNTER_END;
+    static uint8_t stateCounter = eSTATE_TICKS_COUNTER_END;
     static uint16_t waitingTimeout = eWATCHDOG_TEST_TIMEOUT_OVER;
 
     uint16_t result = eSELF_TEST_POLLING;
 
-    // if stateCounter is eSTATE_COUNTER_END we entered a new test and have to set some initial values
-    if (stateCounter == eSTATE_COUNTER_END)
+    // if stateCounter is eSTATE_TICKS_COUNTER_END we entered a new test and have to set some initial values
+    if (stateCounter == eSTATE_TICKS_COUNTER_END)
     {
-        stateCounter = eSTATE_COUNTER_INIT;
+        stateCounter = eSTATE_TICKS_COUNTER_INIT;
         waitingTimeout = eWATCHDOG_TEST_TIMEOUT_TIME;
     }
 
@@ -88,7 +88,7 @@ static uint16_t readBackPortPolling(bool expectedReadbackState, uint8_t readback
         stateCounter--;
 
         // at the end of the test stateCounter has to be 0
-        if (stateCounter == eSTATE_COUNTER_END)
+        if (stateCounter == eSTATE_TICKS_COUNTER_END)
         {
             // readback as expected
             result = eSELF_TEST_OK;
@@ -100,13 +100,13 @@ static uint16_t readBackPortPolling(bool expectedReadbackState, uint8_t readback
         waitingTimeout--;
 
         // set state counter back to init value for the case there were some but not enough matching states in a single row
-        stateCounter = eSTATE_COUNTER_INIT;
+        stateCounter = eSTATE_TICKS_COUNTER_INIT;
 
         // give readback some more time to switch to expected state
         if (waitingTimeout == eWATCHDOG_TEST_TIMEOUT_OVER)
         {
             // at the end of the test stateCounter has to be 0 even if the test failed
-            stateCounter = eSTATE_COUNTER_END;
+            stateCounter = eSTATE_TICKS_COUNTER_END;
 
             // timeout happened
             result = eSELF_TEST_TIMEOUT;
