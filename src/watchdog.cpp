@@ -22,6 +22,27 @@ enum
 };
 
 
+// tick values until watchdog test is accepted as successful
+enum {
+    eSTATE_TICKS_COUNTER_END  = 0,
+    eSTATE_TICKS_COUNTER_INIT = 5,  // number of ticks the expected read back state has to be seen without interruption
+};
+
+
+// timeout time during self test if expected test condition hasn't been detected
+enum {
+    eWATCHDOG_TEST_TIMEOUT_OVER = 0,
+    eWATCHDOG_TEST_TIMEOUT_TIME = 10U * 1000,   // time until readback has to become 1 during initial test / become 0 during repeated test
+};
+
+
+// maximum time between self test requests
+enum
+{
+    eWATCHDOG_TEST_REPEAT_TIME = 100UL * 60 * 60 * 1000,        // every 100h the output will be switched off what will be checked by monitoring the readback input
+};
+
+
 enum
 {
     eWATCHDOG_TESTSTATE_INITIAL,                // initial test is running, the initial test is different from the repeated one, it only checks that readback is 0
@@ -61,15 +82,6 @@ enum
  */
 static uint16_t readBackPortPolling(bool expectedReadbackState, uint8_t readbackValue)
 {
-    enum {
-        eSTATE_TICKS_COUNTER_END  = 0,
-        eSTATE_TICKS_COUNTER_INIT = 10,        // expected read back state has to be seen for this amount of ticks to be accepted
-    };
-    enum {
-        eWATCHDOG_TEST_TIMEOUT_OVER = 0,
-        eWATCHDOG_TEST_TIMEOUT_TIME = 10U * 1000,   // time until readback has to become 1 during initial test / become 0 during repeated test
-    };
-
     static uint8_t stateCounter = eSTATE_TICKS_COUNTER_END;
     static uint16_t waitingTimeout = eWATCHDOG_TEST_TIMEOUT_OVER;
 
@@ -266,7 +278,7 @@ void watchdog_selfTestHandler(uint8_t readbackValue)
                 else
                 {
                     // time since last self test is over an no further one has been requested
-                    errorAndDiagnosis_setError(eERROR_INITIAL_SELF_TEST_ERROR);
+                    errorAndDiagnosis_setError(eERROR_REPEATED_SELF_TEST_REQUEST_MISSED);
                     watchDogTestState = eWATCHDOG_TESTSTATE_FAILED;
                 }
                 break;

@@ -474,6 +474,7 @@ static void handleRequest(char *received)
             index = addChar(response, index, eCOMMAND_NACK);
             index = addInteger(response, index, getMessageError());
             index = addRequest(response, index, received);
+            index = addInteger(response, index, crc);
         }
         else
         {

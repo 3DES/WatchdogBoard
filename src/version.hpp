@@ -2,7 +2,7 @@
 #define VERSION_H
 
 
-#define VERSION "1.3_4xUNPULSED"                    // not more than MAX_REQUEST_LENGTH characters allowed (but will be checked automatically!)
+#define VERSION "1.4_4xUNPULSED"                    // not more than MAX_REQUEST_LENGTH characters allowed (but will be checked automatically!)
 
 
 #endif

@@ -17,7 +17,6 @@ enum
 enum
 {
     eWATCHDOG_TEST_READBACK = 0,                                // input to be used as watchdog readback
-    eWATCHDOG_TEST_REPEAT_TIME = 100UL * 60 * 60 * 1000,        // every 100h the output will be switched off what will be checked by monitoring the readback input
 };
 
 
