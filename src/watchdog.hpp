@@ -21,7 +21,7 @@ enum
 
 
 void watchdog_setWatchdog(uint16_t value);
-bool watchdog_getWatchdog(void);
+bool watchdog_trigger(void);
 bool watchdog_readWatchdog(void);
 bool watchdog_resetPortMustBeLocked(void);
 
@@ -29,6 +29,12 @@ bool watchdog_requestSelfTest(void);
 void watchdog_selfTestHandler(uint8_t readbackValue);
 
 uint8_t watchdog_getState(void);
+
+
+static inline bool watchdog_running(void)
+{
+    return watchdog_getState() == eWATCHDOG_STATE_OK;
+}
 
 
 #endif

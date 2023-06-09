@@ -88,6 +88,12 @@
         < 7;R;0;1;19175;\n                  # OK, input 0 is 1 now
         > 8;S;1;0;64029;\n                  # switch output 1 to OFF again
         < 8;S;1;1;0;22322;\n                # OK, output 1 was 1 and changed to 0
+
+
+0;V;5971;
+1;W;1;43612;
+2;S;1;1;1;
+
 */
 
 

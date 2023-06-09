@@ -233,7 +233,7 @@ static inline void handleWatchdog(void)
     watchdog_selfTestHandler(ioHandler_getInput(eWATCHDOG_TEST_READBACK));
 
     // set watchdog output periodically so handler can toggle it!
-    if (watchdog_getWatchdog())         // this executes the cyclic watchdog thread!
+    if (watchdog_trigger())         // this executes the cyclic watchdog thread!
     {
         setWatchdogPort();              // WD is running, set output (or toggle it if it is a pulsed one)
     }
@@ -275,7 +275,7 @@ static inline void handleOutputs(void)
     for (uint8_t index = 0; index < eSUPPORTED_OUTPUTS; index++)
     {
         // switch output ON if it is set to ON and there is no watchdog ERROR, otherwise switch it OFF
-        if (outputs[index])
+        if (outputs[index] && watchdog_running())
         {
             setOutputPort(index);       // if watchdog is running and output is set to ON switch the referring port ON
         }

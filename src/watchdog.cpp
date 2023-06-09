@@ -145,7 +145,9 @@ static void switchWatchdogIntoErrorState(void)
     // in ERROR case lock the reset pin for a while, so external timing relay can be switched OFF and even after a reset the battery cannot be started again without pressing a button manually!
     if (resetLockCounter != eUNLOCK_RESET)
     {
+        debug_pin1(LOW);
         resetLockCounter--;
+        debug_pin1(HIGH);
     }
 }
 
@@ -364,12 +366,9 @@ bool watchdog_readWatchdog(void)
 
 
 /**
- * @brief get watchdog state, each get call decrements the watchdog, has to be called cyclically!
- *
- * @return true     watchdog is still running, eth. is OK, watchdog relay should be switched ON
- * @return false    watchdog has stopped, this means ERROR, watchdog relay has to be switched OFF immediately
+ * @brief watchdog trigger, each call decrements the watchdog, has to be called every millisecond!
  */
-bool watchdog_getWatchdog(void)
+bool watchdog_trigger(void)
 {
 
 #if WATCHDOG_VALUE_CLEAR != 0
@@ -392,11 +391,12 @@ bool watchdog_getWatchdog(void)
     }
 
     // since this method is called periodically do an overall check if watchdog is in ERROR state (defensive programming... yes we want this here!)
-    if (!watchdog_readWatchdog() && (watchDogState == eWATCHDOG_STATE_OK))
+    if (!watchdog_readWatchdog() && (watchDogState != eWATCHDOG_STATE_INIT))
     {
-        errorAndDiagnosis_setError(eERROR_WATCHDOG_STOPPED_UNEXPECTEDLY);
-
-        // watchdog became zero during last turn or was set to zero via command
+        if (watchDogState == eWATCHDOG_STATE_OK)
+        {
+            errorAndDiagnosis_setError(eERROR_WATCHDOG_STOPPED_UNEXPECTEDLY);
+        }
         switchWatchdogIntoErrorState();
     }
 
