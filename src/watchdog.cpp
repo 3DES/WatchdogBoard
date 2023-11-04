@@ -71,6 +71,15 @@ enum
     eSELF_TEST_TIMEOUT = 1,
     eSELF_TEST_OK      = 2,
 };
+
+
+enum
+{
+    eWATCHDOG_STATE_EXPECT_FALSE = false,
+    eWATCHDOG_STATE_EXPECT_TRUE  = true,
+};
+
+
 /**
  * @brief Checks if readback port has expected state
  *
@@ -155,7 +164,7 @@ static void switchWatchdogIntoErrorState(void)
 /**
  * @brief Requests self test
  *
- * @return true     in case watchdog is already running an a test can be requested
+ * @return true     in case watchdog is already running a test can be requested
  * @return false    in case watchdog is not running or a test is already in progress
  */
 bool watchdog_requestSelfTest(void)
@@ -193,7 +202,7 @@ void watchdog_selfTestHandler(uint8_t readbackValue)
             // initially ensure watchdog is switched OFF (what means it can be switched off!)
             case eWATCHDOG_TESTSTATE_INITIAL:
                 // wait for read back becomes OFF
-                switch (readBackPortPolling(false, readbackValue))
+                switch (readBackPortPolling(eWATCHDOG_STATE_EXPECT_FALSE, readbackValue))
                 {
                     case eSELF_TEST_TIMEOUT:
                         // timeout during initial self test
@@ -218,7 +227,7 @@ void watchdog_selfTestHandler(uint8_t readbackValue)
             case eWATCHDOG_TESTSTATE_REPEATED_EXPECT_ON:
                 selfTestConfirmation = true;            // self test confirms that watchdog output can be switched ON (what is the expected state here)
                 // wait for read back becomes ON
-                switch (readBackPortPolling(true, readbackValue))
+                switch (readBackPortPolling(eWATCHDOG_STATE_EXPECT_TRUE, readbackValue))
                 {
                     case eSELF_TEST_TIMEOUT:
                         // timeout during repeated self test, watchdog is not OK, watchdog port is OFF
@@ -240,7 +249,7 @@ void watchdog_selfTestHandler(uint8_t readbackValue)
             case eWATCHDOG_TESTSTATE_REPEATED_EXPECT_OFF:
             {
                 // wait for read back becomes OFF
-                switch (readBackPortPolling(false, readbackValue))
+                switch (readBackPortPolling(eWATCHDOG_STATE_EXPECT_FALSE, readbackValue))
                 {
                     case eSELF_TEST_TIMEOUT:
                         // timeout during repeated self test, watchdog output couldn't be switched OFF

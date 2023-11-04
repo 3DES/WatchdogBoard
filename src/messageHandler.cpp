@@ -485,6 +485,7 @@ static void handleRequest(char *received)
                     index = addInteger(response, index, watchdog_readWatchdog());
                     watchdog_setWatchdog(commandValue);
                     index = addInteger(response, index, watchdog_readWatchdog());
+                    index = addInteger(response, index, watchdog_resetPortMustBeLocked() ? 1: 0);
                     break;
 
                 case eCOMMAND_SET_OUTPUT:

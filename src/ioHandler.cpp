@@ -96,7 +96,7 @@ static inline void clearWatchdogPort(void)
 static inline void lockResetPort(void)
 {
     // set pin to HIGH
-    digitalWrite(resetLockPin, HIGH);       // ensure it's set to HIGH as soon as it will be configured as output
+    digitalWrite(resetLockPin, HIGH);       // ensure it's set to HIGH as soon as it will be configured as output (since it's currently an input the pull-up will be switched now, what is OK)
     pinMode(resetLockPin, OUTPUT);
 }
 
@@ -105,8 +105,8 @@ static inline void lockResetPort(void)
 static inline void unlockResetPort(void)
 {
     // set pin to hi-Z
-    digitalWrite(resetLockPin, LOW);        // disable pullup because "HIGH" in input mode means pullup is enabled
     pinMode(resetLockPin, INPUT);           // meanwhile set it to hi-Z
+    digitalWrite(resetLockPin, LOW);        // disable pullup because "HIGH" in input mode means pullup is enabled
 }
 
 

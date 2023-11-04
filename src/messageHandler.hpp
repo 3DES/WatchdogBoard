@@ -12,7 +12,7 @@
 
     WATCHDOG:
         request:  "<fno>;W;<state>;<crc>;\n"
-        response: "<fno>;W;<oldState>;<newState>;<crc>;\n"
+        response: "<fno>;W;<oldState>;<newState>;<lockState>;<crc>;\n"
 
     SET OUTPUT:
         request:  "<fno>;S;<output>;<state>;<crc>;\n"
