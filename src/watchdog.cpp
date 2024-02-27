@@ -3,6 +3,7 @@
 #include "watchdog.hpp"
 #include "timer.hpp"
 #include "errorAndDiagnosis.hpp"
+#include "ioHandler.hpp"
 
 
 // watchdog (re-)trigger time
@@ -25,7 +26,7 @@ enum
 // tick values until watchdog test is accepted as successful
 enum {
     eSTATE_TICKS_COUNTER_END  = 0,
-    eSTATE_TICKS_COUNTER_INIT = 5,  // number of ticks the expected read back state has to be seen without interruption
+    eSTATE_TICKS_COUNTER_INIT = 3,  // number of ticks the expected read back state has to be seen without interruption
 };
 
 
@@ -149,14 +150,14 @@ static void switchWatchdogIntoErrorState(void)
     watchDogState = eWATCHDOG_STATE_ERROR;
     watchdogCounter = eWATCHDOG_VALUE_CLEAR;
     interrupts();
-    debug_pin2(LOW);
+    //debug_pin2(LOW);  // #1
 
     // in ERROR case lock the reset pin for a while, so external timing relay can be switched OFF and even after a reset the battery cannot be started again without pressing a button manually!
     if (resetLockCounter != eUNLOCK_RESET)
     {
-        debug_pin1(LOW);
+        //debug_pin1(LOW);  // #1
         resetLockCounter--;
-        debug_pin1(HIGH);
+        //debug_pin1(HIGH); // #1
     }
 }
 
@@ -248,16 +249,9 @@ void watchdog_selfTestHandler(uint8_t readbackValue)
 
             case eWATCHDOG_TESTSTATE_REPEATED_EXPECT_OFF:
             {
-                // wait for read back becomes OFF
-                switch (readBackPortPolling(eWATCHDOG_STATE_EXPECT_FALSE, readbackValue))
+                switch (ioHandler_watchdogStopAndRetrigger())
                 {
-                    case eSELF_TEST_TIMEOUT:
-                        // timeout during repeated self test, watchdog output couldn't be switched OFF
-                        watchDogTestState = eWATCHDOG_TESTSTATE_FAILED;
-                        errorAndDiagnosis_setError(eERROR_REPEATED_SELF_TEST_OFF_ERROR);
-                        break;
-
-                    case eSELF_TEST_OK:
+                    case eSTOP_AND_RETRIGGER_PASSED:
                         // second stage of repeated self test passed, watchdog output could be switched OFF
                         errorAndDiagnosis_setExecutedTest(eEXECUTED_TEST_SELF_TEST);
                         selfTestConfirmation = true;                                // self test confirms that watchdog output can be switched ON (test was successful)
@@ -265,8 +259,16 @@ void watchdog_selfTestHandler(uint8_t readbackValue)
                         watchDogTestState = eWATCHDOG_TESTSTATE_PASSED;             // finish test
                         break;
 
-                    // ignore the rest
-                    default:
+                    case eSTOP_AND_RETRIGGER_STOP_FAILED:
+                        // timeout during repeated self test, watchdog output couldn't be switched OFF
+                        watchDogTestState = eWATCHDOG_TESTSTATE_FAILED;
+                        errorAndDiagnosis_setError(eERROR_REPEATED_SELF_TEST_OFF_ERROR);
+                        break;
+
+                    case eSTOP_AND_RETRIGGER_RETRIGGER_FAILED:
+                        // timeout during repeated self test, watchdog output couldn't be switched ON again
+                        watchDogTestState = eWATCHDOG_TESTSTATE_FAILED;
+                        errorAndDiagnosis_setError(eERROR_REPEATED_SELF_TEST_RETRIGGER_ERROR);
                         break;
                 }
                 break;
@@ -345,7 +347,7 @@ void watchdog_setWatchdog(uint16_t value)
             resetLockCounter = eLOCK_RESET;             // lock reset port as soon as watchdog has been started
             watchDogState = eWATCHDOG_STATE_OK;
             interrupts();
-            debug_pin2(HIGH);
+            //debug_pin2(HIGH); // #1
         }
         else
         {
@@ -370,7 +372,17 @@ void watchdog_setWatchdog(uint16_t value)
  */
 bool watchdog_readWatchdog(void)
 {
+#if defined DEBUG && defined ALWAYS_RUNNING
+    static bool onceTrue = false;
+    if (watchdogCounter != eWATCHDOG_VALUE_CLEAR)
+    {
+        // if watchdog was true once, it will never become false again, so init phase is fully simulated but then all errors are ignored
+        onceTrue = true;
+    }
+    return onceTrue;
+#else
     return (watchdogCounter != eWATCHDOG_VALUE_CLEAR);
+#endif
 }
 
 

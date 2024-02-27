@@ -6,7 +6,8 @@
 #include <pins_arduino.h>
 
 
-//#define DEBUG
+//#define DEBUG              // firmware "D_xxx"
+//#define ALWAYS_RUNNING     // firmware "T_xxx", watchdog will never be cleared, that's only accepted in DEBUG case and to be used with care!!!
 #if not defined DEBUG
 // defines to disable critical DEBUG behavior
 #   define P1(...)
@@ -14,6 +15,9 @@
 #   define P3(...)
 #   define IGNORE_CRC 0            // set to 1 for debugging but don't forget to set back!
 #   define IGNORE_FRAME_NUMBER 0   // set to 1 for debugging but don't forget to set back!
+#   if defined ALWAYS_RUNNING
+#       undef ALWAYS_RUNNING       // defensive programming!
+#   endif
 #else
 // all critical DEBUG stuff has to be put into this define block!
 #   define IGNORE_CRC 1            // set to 1 for debugging but don't forget to set back!

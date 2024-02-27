@@ -32,11 +32,23 @@ enum
 };
 
 
+// return values of ioHandler_watchdogStopAndRetrigger()
+enum
+{
+    eSTOP_AND_RETRIGGER_PASSED = 0,
+    eSTOP_AND_RETRIGGER_STOP_FAILED = 1,
+    eSTOP_AND_RETRIGGER_RETRIGGER_FAILED = 2,
+};
+
+
 void ioHandler_setup(void);
 
 void ioHandler_setOutput(uint16_t index, uint8_t value);
 bool ioHandler_getOutput(uint16_t index);
 bool ioHandler_getInput(uint16_t index);
+
+uint8_t ioHandler_watchdogStopAndRetrigger(void);
+
 
 void ioHandler_cyclicTask();
 

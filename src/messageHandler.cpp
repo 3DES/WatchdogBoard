@@ -49,9 +49,12 @@ static const struct __attribute__((packed)) {
     char leadOut[8];
 } VERSION_FIELD = {
     MAGIC,
-#if defined DEBUG
-    "D"         // hard coded 'D' character in case of debug version!
+#if defined DEBUG && defined ALWAYS_RUNNING
+    "T_"         // hard coded leading 'T_' in case of trigger always version!
+#elif defined DEBUG
+    "D_"         // hard coded leading 'D_' in case of debug version!
 #endif
+
     VERSION,
     MAGIC
 };

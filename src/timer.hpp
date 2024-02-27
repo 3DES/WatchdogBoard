@@ -11,6 +11,20 @@ enum
 };
 
 
+static inline bool timer_interruptSet(void)
+{
+    // if TIFR1.OCF1A is ONE an interrupt occurred
+    return TIFR1 & (1 << OCF1A);
+}
+
+
+static inline void timer_interruptClear(void)
+{
+    // interrupt can be cleared by writing a logic ONE to TIFR1.OCF1A, it's strange but that's the way it works!
+    TIFR1 |= (1 << OCF1A);
+}
+
+
 void timer_setup(void);
 
 

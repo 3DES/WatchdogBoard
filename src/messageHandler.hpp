@@ -89,11 +89,13 @@
         > 8;S;1;0;64029;\n                  # switch output 1 to OFF again
         < 8;S;1;1;0;22322;\n                # OK, output 1 was 1 and changed to 0
 
-
+        -- minimum startup and trigger test, with debug version it can be executed repeatedly --
 0;V;5971;
 1;W;1;43612;
-2;S;1;1;1;
-
+2;D;34820;
+3;T;302;
+4;D;50078;
+5;D;57125;
 */
 
 

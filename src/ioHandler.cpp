@@ -23,8 +23,10 @@ static bool inputs[eSUPPORTED_INPUTS];      // input states,     false per defau
 
 static bool highCycle = false;              // switch all outputs synchronized, in highCycle phase switch all active outputs ON, in !highCycle phase switch all active outputs OFF
 
+#define WATCHDOG_OUTPUT D6
+
 static const uint8_t inputPorts[eSUPPORTED_INPUTS] = {D2, D3, D4, D5};
-static const uint8_t outputPorts[eSUPPORTED_OUTPUTS + ADDITIONAL_OUTPUTS]    = {D7, D8, D9, D11, D12, A1, A2, /* watchdog output... */ D6};        // all output ports including the watchdog output port that has to be the last given one!!!
+static const uint8_t outputPorts[eSUPPORTED_OUTPUTS + ADDITIONAL_OUTPUTS]    = {D7, D8, D9, D11, D12, A1, A2, /* watchdog output... */ WATCHDOG_OUTPUT};        // all output ports including the watchdog output port that has to be the last given one!!!
 static const bool    pulsedPorts[eSUPPORTED_OUTPUTS + ADDITIONAL_OUTPUTS]    = {1,  1,  1,  0,   0,   0,  0,  /* watchdog output... */ 1};         // a value > 0 means output has to be pulsed, last value relates to the watchdog port and is ignored (pulsed always)!!! This is not intended to save energy!
 static const uint8_t ledPin = D13;
 static const uint8_t resetLockPin = A0;         // needs to be switched between ON and hi-Z
@@ -294,6 +296,98 @@ static inline void handleInputs(void)
     {
         inputs[index] = getInputPort(index);
     }
+}
+
+
+/**
+ * @brief Retriggers the watchdog output for arround 300us at a very high frequency to bring it (back) to ON state as fast as possible
+ */
+uint8_t ioHandler_watchdogStopAndRetrigger(void)
+{
+    #if WATCHDOG_OUTPUT != D6
+    #   error WATCHDOG_OUTPUT must be D6, if watchdog output has been changed the following code has to be checked!
+    #endif
+
+    debug_pin2(HIGH);
+    // prepare port values
+    uint8_t portOn  = PORTD | (1 << WATCHDOG_OUTPUT);    // if watchdog output has been changed ensure that a shift with the referring define really works!!!
+    uint8_t portOff = PORTD & ~(1 << WATCHDOG_OUTPUT);   // if watchdog output has been changed ensure that a shift with the referring define really works!!!
+
+    uint16_t timeoutCounter = 10000;        // 10 seconds for high -> low
+    static uint8_t lowCounter = 5;
+
+    // want to see low level lowCounter times sice a single occurrence could be an EMC interference
+    while (lowCounter-- && timeoutCounter)
+    {
+        while(getInputPort(eWATCHDOG_TEST_READBACK) && timeoutCounter)
+        {
+            // timer interrupt (1ms) occurred?
+            if (timer_interruptSet())
+            {
+                timeoutCounter--;
+                timer_interruptClear();
+            }
+        }
+    }
+    debug_pin2(LOW);
+
+    if (!timeoutCounter)
+    {
+        // timeout occurred
+        return eSTOP_AND_RETRIGGER_STOP_FAILED;
+    }
+
+    timeoutCounter = 10000;              // 10 seconds for high -> low
+    static uint16_t highCounter = 500;   // even if high level has been seen again don't stop fast triggering just to ensure the relay stays active when the normal 1ms trigger period is reactivated!
+
+    debug_pin2(HIGH);
+    // want to see high level highCounter times sice a single occurrence could be an EMC interference
+    while (highCounter && timeoutCounter)
+    {
+        // retrigger relay as fast as possible
+        PORTD = portOff;
+        PORTD = portOn;
+        PORTD = portOff;
+        PORTD = portOn;
+        PORTD = portOff;
+        PORTD = portOn;
+        PORTD = portOff;
+        PORTD = portOn;
+        PORTD = portOff;
+        PORTD = portOn;
+        PORTD = portOff;
+        PORTD = portOn;
+        PORTD = portOff;
+        PORTD = portOn;
+        PORTD = portOff;
+        PORTD = portOn;
+        PORTD = portOff;
+        PORTD = portOn;
+        PORTD = portOff;
+        PORTD = portOn;
+
+        if (timer_interruptSet())
+        {
+            // timer interrupt (1ms) occurred, so decrement counter
+            timeoutCounter--;
+            timer_interruptClear();
+        }
+
+        if (getInputPort(eWATCHDOG_TEST_READBACK))
+        {
+            // correct state seen once, so decrement counter
+            highCounter--;
+        }
+    }
+    debug_pin2(LOW);
+
+    if (!timeoutCounter)
+    {
+        // timeout occurred
+        return eSTOP_AND_RETRIGGER_RETRIGGER_FAILED;
+    }
+
+    return eSTOP_AND_RETRIGGER_PASSED;
 }
 
 
